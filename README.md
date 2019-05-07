@@ -16,3 +16,8 @@ em2ex.py filename
 ```
 
 which produces an Exodus II file `filenanem.e` with the reservoir properties saved as elemental (cell-centred) variables.
+
+For example, the `test` directory contains an ASCII Eclipse reservoir model (`.grdecl` file extension). This can be converted to an Exodus II file using
+```
+em2ex.py test.grdecl
+```
