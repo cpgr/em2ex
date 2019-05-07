@@ -23,10 +23,9 @@ filename_base, file_extension = os.path.splitext(filename)
 if (args.filetype == 'eclipse'):
     file_extension = '.grdecl'
 
-
-# Parse the input file and extract node coordinates and properties
+# Parse the input file and extract node coordinates, numbering and properties
 if file_extension == '.grdecl':
-    nx, ny, nz, xdata, ydata, zdata, props = eclipse.parseEclipse(filename)
+    xcoords, ycoords, zcoords, nodeIds, elemIds, elemNodes, props = eclipse.parseEclipse(filename)
 
 else:
     print 'File extension ', file_extension, ' not supported'
@@ -34,55 +33,6 @@ else:
 
 # After parsing the reservoir model, and extracting the material properties, the Exodus
 # file can be written once the data is correctly formatted
-
-# Function to assign node numbers while avoiding duplicates
-def addNode(array, i,j,k, count):
-    if array[k,j,i] == 0:
-        # Node hasn't been numbered
-        array[k,j,i] = count
-        count += 1
-        return count
-    else:
-        # Node has already been numbered
-        return count
-
-# Loop through the elements and add the node numbers following the right-hand rule,
-# starting at 1. Also construct the element connectivity array
-nodeIds = np.zeros((nz+1, ny+1, nx+1), dtype=int)
-elemNodes = np.zeros((nz*ny*nx, 8), dtype=int)
-elemIds = np.zeros((nz, ny, nx), dtype=int)
-
-nodenum = 1
-elemnum = 0
-for k in xrange(0,nz):
-    for j in xrange(0,ny):
-        for i in xrange(0,nx):
-            # Label all the nodes for this element
-            nodenum = addNode(nodeIds, i, j, k, nodenum)
-            nodenum = addNode(nodeIds, i+1, j, k, nodenum)
-            nodenum = addNode(nodeIds, i+1, j+1, k, nodenum)
-            nodenum = addNode(nodeIds, i, j+1, k, nodenum)
-            nodenum = addNode(nodeIds, i, j, k+1, nodenum)
-            nodenum = addNode(nodeIds, i+1, j, k+1, nodenum)
-            nodenum = addNode(nodeIds, i+1, j+1, k+1, nodenum)
-            nodenum = addNode(nodeIds, i, j+1, k+1, nodenum)
-
-for k in xrange(0,nz):
-    for j in xrange(0,ny):
-        for i in xrange(0,nx):
-            # Add the nodes for this element to the connectivity array
-            elemNodes[elemnum, 0] = nodeIds[k, j, i]
-            elemNodes[elemnum, 1] = nodeIds[k, j, i+1]
-            elemNodes[elemnum, 2] = nodeIds[k, j+1, i+1]
-            elemNodes[elemnum, 3] = nodeIds[k, j+1, i]
-            elemNodes[elemnum, 4] = nodeIds[k+1, j, i]
-            elemNodes[elemnum, 5] = nodeIds[k+1, j, i+1]
-            elemNodes[elemnum, 6] = nodeIds[k+1, j+1, i+1]
-            elemNodes[elemnum, 7] = nodeIds[k+1, j+1, i]
-
-            # Also the array of element ids
-            elemIds[k,j,i] = elemnum + 1
-            elemnum+=1
 
 # Nodesets for the boundaries of the model
 nodeSets = []
@@ -115,42 +65,27 @@ sideSetSides.append([6]*len(sideSets[5]))
 nodeSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
 sideSetNames = nodeSetNames
 
-# Order the coordinates according to the node numbering
-xcoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
-ycoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
-zcoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
+# Assumes that the model is always 3D
+numDim = 3
 
-for k in xrange(0,nz+1):
-    for j in xrange(0,ny+1):
-        for i in xrange(0,nx+1):
-            # Get the node number corresponding to i,j,k
-            # Note that the array position is node_id - 1
-            nid = nodeIds[k,j,i]
-            xcoords[nid-1] = xdata[k,j,i]
-            ycoords[nid-1] = ydata[k,j,i]
-            zcoords[nid-1] = zdata[k,j,i]
+numNodes = nodeIds.size
+numElems = elemIds.size
+numNodeSets = 6
+numSideSets = 6
 
 # Now prepare to write the exodus exodus file
 # Block ids for the mesh
 if 'SATNUM' in props:
-    blocks = props['SATNUM'].reshape(nz, ny, nx)
+    blocks = props['SATNUM']
 else:
-    blocks = np.zeros((nz,ny,nx))
-
-# Assumes that the model is always 3D
-numDim = 3
+    blocks = np.zeros(numElems)
 
 # The number of blocks is equal to the unique numbers of satnum values
 block_ids = np.unique(props['SATNUM'])
 # Not working properly, set a single block
-blocks = np.zeros((nz,ny,nx))
+blocks = np.zeros(numElems)
 block_ids = [0]
-
 numBlocks = len(block_ids)
-numNodes = (nx +1)* (ny+1) * (nz+1)
-numElems = nx*ny*nz
-numNodeSets = 6
-numSideSets = 6
 
 exodusTitle = 'Converted from ' + filename + ' by em2ex.py'
 
