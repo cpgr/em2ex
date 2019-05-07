@@ -11,12 +11,18 @@ import os
 # Read filename and options from commandline
 parser = argparse.ArgumentParser(description='Converts earth model to Exodus II format')
 parser.add_argument('filename')
-
+parser.add_argument('--filetype', default = None, dest='filetype',
+    choices = ['eclipse'], help = 'Explicitly state the filetype for unknown extensions')
 args = parser.parse_args()
 
 # Extract file name and extension
 filename = args.filename
 filename_base, file_extension = os.path.splitext(filename)
+
+# Override the file extension in the input file using the --filetype argument
+if (args.filetype == 'eclipse'):
+    file_extension = '.grdecl'
+
 
 # Parse the input file and extract node coordinates and properties
 if file_extension == '.grdecl':
