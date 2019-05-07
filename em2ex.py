@@ -22,6 +22,13 @@ filename_base, file_extension = os.path.splitext(filename)
 if file_extension == '.grdecl':
     nx, ny, nz, xdata, ydata, zdata, props = eclipse.parseEclipse(filename)
 
+else:
+    print 'File extension ', file_extension, ' not supported'
+    exit()
+
+# After parsing the reservoir model, and extracting the material properties, the Exodus
+# file can be written once the data is correctly formatted
+
 # Function to assign node numbers while avoiding duplicates
 def addNode(array, i,j,k, count):
     if array[k,j,i] == 0:
