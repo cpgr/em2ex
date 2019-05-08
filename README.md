@@ -21,3 +21,25 @@ For example, the `test` directory contains an ASCII Eclipse reservoir model (`.g
 ```
 em2ex.py test.grdecl
 ```
+
+## Commandline options
+
+`em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
+`em2ex` to read the correct format using the `--filetype` commandline option.
+
+For example, if the reservoir model is named `model.dat` but is actually an Eclipse ASCII
+file, then `em2ex` can still be used in the following manner
+
+```
+em2ex --filetype eclipse model.dat
+```
+
+to produce an Exodus II model `test.e`.
+
+## Supported formats
+
+`em2ex` currently supports:
+
+| File format | File extension |
+| ----------- | -------------- |
+Eclipse ASCII | `.grdecl`      |
