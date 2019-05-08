@@ -19,33 +19,6 @@ def readBlock(f):
             break
     return block
 
-def readBlockHDF5(f, d, chunksize=1e6):
-    '''Reads block of data and saves it to a HDF5 dataset in chunks'''
-    block = []
-    pos = 0
-    end = False
-    while True:
-        line = next(f)
-        # Skip comments
-        if line.startswith('--'):
-            continue
-        data = processData(line)
-        block.extend(data)
-        # End read if line ends with /
-        if block[-1] == '/':
-            block.pop()
-            end = True
-        # Save to HDF5 dataset if number of individual data elements is greater than chunksize
-        if len(block) > int(chunksize) or end == True:
-            block = map(float, block)
-            d[pos:pos+len(block)] = np.asarray(block)
-            pos += len(block)
-            block = []
-        # End read if line ends with /
-        if end == True:
-            break
-    return
-
 def processData(line):
     '''Expands shorthand notation N*data to N copies of data'''
     data = []
@@ -73,22 +46,6 @@ def readKeyword(f, keyword):
             continue
 
     return block
-
-def readKeywordHDF5(f, keyword, d, chunksize=1e6):
-    '''Read keyword data from grdecl file and save it to a HDF5 dataset in chunks'''
-    for line in f:
-        # Skip comments and blank lines
-        if line.startswith('--') or not line.strip():
-            continue
-
-        elif line.startswith(keyword):
-            readBlockHDF5(f, d, chunksize)
-
-        else:
-            # Skip all unknown sections
-            continue
-
-    return
 
 def parseEclipse(f):
     '''Parse the ECLIPSE file and return node coordinates and material properties'''
