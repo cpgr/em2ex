@@ -1,6 +1,8 @@
 # Functions to read Eclipse grdecl files and parse the input
 
 import numpy as np
+from ExodusModel import ExodusModel
+from nodeutils import addNode
 
 def readBlock(f):
     '''Reads block of data and returns it as a list'''
@@ -56,8 +58,13 @@ def parseEclipse(f):
     # Open the .grdecl file for reading
     file = open(f)
 
-    # Dict for storing reservoir properties
-    props = {};
+    # Dict for storing elemental (cell-centred) reservoir properties
+    elemProps = {};
+
+    # Declare empty lists for all required keywords
+    specgridlist = []
+    coordlist = []
+    zcornlist = []
 
     for line in file:
 
@@ -79,7 +86,7 @@ def parseEclipse(f):
             prop = line.split()[0]
             proplistname = prop.lower() + 'list'
             proplistname = np.asarray(readBlock(file))
-            props[prop] = proplistname
+            elemProps[prop] = proplistname
 
         else:
             # Skip all unkown sections
@@ -88,6 +95,19 @@ def parseEclipse(f):
     # Close the file after parsing
     file.close()
 
+    # Check that required SPECGRID, COORD and ZCORN data has been supplied
+    if not specgridlist:
+        print "No SPECGRID data found in ", f
+        exit()
+
+    if not coordlist:
+        print "No COORD data found in ", f
+        exit()
+
+    if not zcornlist:
+        print "No ZCORN data found in ", f
+        exit()
+
     # The number of elements in the x, y and z directions are specified in the SPECGRID data
     nx = int(specgridlist[0])
     ny = int(specgridlist[1])
@@ -95,22 +115,22 @@ def parseEclipse(f):
 
     # Check the number of COORD entries parsed is correct (6 points per entry)
     if (nx+1)*(ny+1)*6 != len(coordlist):
-        print("The number of COORD entries read is not correct")
+        print "The number of COORD entries read is not correct"
         exit()
 
     # Check the number of ZCORN entries parsed is correct
     if (2 * nx)*(2 * ny) *(2 * nz) != len(zcornlist):
-        print("The number of ZCORN entries read is not correct")
+        print "The number of ZCORN entries read is not correct"
         exit()
 
-    # Check all of the properties that have been parsed
-    for prop in props:
-        if len(props[prop]) != nx*ny*nz:
+    # Check all of the elemental properties that have been parsed
+    for prop in elemProps:
+        if len(elemProps[prop]) != nx*ny*nz:
             print "The number of", prop, "entries read is not correct"
             exit()
 
     # Notify user that parsing has finished
-    print("Finished parsing Eclipse file")
+    print "Finished parsing Eclipse file"
 
     # Now the data can be reshaped and processed for easy use
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
@@ -180,15 +200,24 @@ def parseEclipse(f):
                 ycoords[nid-1] = ydata[k,j,i]
                 zcoords[nid-1] = zdata[k,j,i]
 
-    return xcoords, ycoords, zcoords, nodeIds, elemIds, elemNodes, props
+    # Add data to the ExodusModel object
+    model = ExodusModel()
+    model.nx = nx
+    model.ny = ny
+    model.nz = nz
+    model.xcoords = xcoords
+    model.ycoords = ycoords
+    model.zcoords = zcoords
+    model.nodeIds = nodeIds
+    model.elemIds = elemIds
+    model.elemNodes = elemNodes
+    model.elemVars = elemProps
 
-# Function to assign node numbers while avoiding duplicates
-def addNode(array, i,j,k, count):
-    if array[k,j,i] == 0:
-        # Node hasn't been numbered
-        array[k,j,i] = count
-        count += 1
-        return count
+    # The number of blocks is equal to the unique numbers of satnum values
+    # Block ids for the mesh
+    if 'SATNUM' in model.elemVars:
+        model.blockIds = model.elemVars['SATNUM'].astype(int)
     else:
-        # Node has already been numbered
-        return count
+        model.blockIds = np.zeros(numElems).astype(int)
+
+    return model
