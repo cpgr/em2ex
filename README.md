@@ -74,8 +74,8 @@ Second, the user will need to create a second block model in Leapfrog that is n+
 
 ## Contributors
 
-- Chris Green, CSIRO (@cpgr)
-- Rob Podgorney, INL
+- Chris Green, CSIRO ([cpgr](https://github.com/cpgr))
+- Rob Podgorney, INL ([rpodgorney](https://github.com/rpodgorney))
 
 ## Feature requests/ bug reports
 
