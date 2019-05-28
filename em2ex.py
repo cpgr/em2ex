@@ -24,7 +24,7 @@ filename_base, file_extension = os.path.splitext(filename)
 if (args.filetype == 'eclipse'):
     file_extension = '.grdecl'
 
-# Parse the input file using the appropriate reader
+# Parse the reservoir model using the appropriate reader
 if file_extension == ".grdecl":
     model = eclipse.parseEclipse(filename)
 
@@ -33,7 +33,6 @@ else:
     exit()
 
 # After parsing the reservoir model, the Exodus file can be written
-
 # Nodesets for the boundaries of the model (note: assumes 3D model)
 nodeSets = []
 nodeSets.append(model.nodeIds[0,:,:].flatten().tolist())
@@ -72,8 +71,6 @@ numNodes = model.nodeIds.size
 numElems = model.elemIds.size
 numNodeSets = 6
 numSideSets = 6
-
-# Now prepare to write the exodus file
 
 # The number of blocks is equal to the unique numbers of block ids
 blocks = model.blockIds

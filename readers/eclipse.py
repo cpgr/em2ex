@@ -213,7 +213,6 @@ def parseEclipse(f):
     model.elemNodes = elemNodes
     model.elemVars = elemProps
 
-    # The number of blocks is equal to the unique numbers of satnum values
     # Block ids for the mesh
     if 'SATNUM' in model.elemVars:
         model.blockIds = model.elemVars['SATNUM'].astype(int)
