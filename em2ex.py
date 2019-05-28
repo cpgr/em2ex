@@ -3,7 +3,7 @@
 # Convert reservoir Earth model to exodus mesh
 
 import numpy as np
-from readers import eclipse
+from readers import eclipse, leapfrog
 from exodus import exodus
 from readers import ExodusModel
 import argparse
@@ -13,7 +13,7 @@ import os
 parser = argparse.ArgumentParser(description='Converts earth model to Exodus II format')
 parser.add_argument('filename')
 parser.add_argument('--filetype', default = None, dest='filetype',
-    choices = ['eclipse'], help = 'Explicitly state the filetype for unknown extensions')
+    choices = ['eclipse', 'leapfrog'], help = 'Explicitly state the filetype for unknown extensions')
 args = parser.parse_args()
 
 # Extract file name and extension
@@ -21,12 +21,18 @@ filename = args.filename
 filename_base, file_extension = os.path.splitext(filename)
 
 # Override the file extension in the input file using the --filetype argument
-if (args.filetype == 'eclipse'):
+if args.filetype == 'eclipse':
     file_extension = '.grdecl'
+
+elif args.filetype == 'leapfrog':
+    file_extension = ''
 
 # Parse the reservoir model using the appropriate reader
 if file_extension == ".grdecl":
     model = eclipse.parseEclipse(filename)
+
+elif file_extension == '':
+    model = leapfrog.parseLeapfrog(filename)
 
 else:
     print 'File extension ', file_extension, ' not supported'
