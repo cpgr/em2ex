@@ -1,5 +1,12 @@
 # One-step conversion from reservoir Earth models to Exodus II format
 
+`em2ex` converts a reservoir model to an Exodus II file that can then be used in
+a simulation tool (such as [MOOSE](http://www.mooseframework.org)). Currently, `em2ex`
+supports two reservoir modelling packages:
+
+- Eclipse
+- Leapfrog Geothermal
+
 ## Setup
 
 `em2ex` requires the `exodus` package (including the python API) to be installed. This can be done by installing the [`seacas`](https://github.com/gsjaardema/seacas) package.
@@ -15,11 +22,17 @@ To convert a reservoir model to an Exodus II file, run
 em2ex.py filename
 ```
 
-which produces an Exodus II file `filenanem.e` with the reservoir properties saved as elemental (cell-centred) variables.
+which produces an Exodus II file `filenanem.e` with the cell-centred reservoir properties saved
+as elemental variables, and nodal properties saved as nodal variables.
 
-For example, the `test` directory contains an ASCII Eclipse reservoir model (`.grdecl` file extension). This can be converted to an Exodus II file using
+For example, the `test/eclipse` directory contains an ASCII Eclipse reservoir model (`.grdecl` file extension). This can be converted to an Exodus II file using
 ```
 em2ex.py test.grdecl
+```
+
+Similarly, the `test/leapfrog` directory contains a set of example Leapfrog reservoir model files that can be converted to Exodus II files using
+```
+em2ex.py test
 ```
 
 ## Commandline options
@@ -42,4 +55,28 @@ to produce an Exodus II model `test.e`.
 
 | File format | File extension |
 | ----------- | -------------- |
-Eclipse ASCII | `.grdecl`      |
+| Eclipse ASCII | `.grdecl`      |
+| Leapfrog Geothermal | - |
+
+## Leapfrog Geothermal
+
+To prepare for usage, several steps must be taken in leapfrog.
+
+First, the user must export a "block model" -- as a CSV with full header data.  Leapfrog gives three options for export of block models,
+
+  1. **CSV Block Model - this option includes the model definition info on the top of the CSV file.  This option is required for use of this tool.**
+  2. CSV Block Model + Text File - this option gives the same info as above, but in two files/
+  3. CSV Points - a raw dump of the point data
+
+The CSV Block Model file must contain all of the elemental (material property) data--anything that is cell entered.  You will need the rename to file to *filename*_cell.csv
+
+Second, the user will need to create a second block model in Leapfrog that is n+1 bigger and with the base point being nx/2, ny/2, and nz/2 offset--this will make the second mesh centers align with the corners of the first mesh...giving the locations of the nodes.  In Leapfrog, you can interpolate the field estimated pressure and temperature onto this block model.  This second block model must be exported exactly the same as the first one.  You will need to rename the file to *filename*_node.csv
+
+## Contributors
+
+- Chris Green, CSIRO (@cpgr)
+- Rob Podgorney, INL
+
+## Feature requests/ bug reports
+
+Any feature requests or bug reports should be made using the issues feature of GitHub. Pull requests are always welcome!
