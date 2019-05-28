@@ -123,14 +123,16 @@ if nodeSetNames:
     exodusFile.put_node_set_names(nodeSetNames)
 
 for i in range(len(sideSets)):
-        exodusFile.put_side_set_params(i, len(sideSets[i]),0)
+        exodusFile.put_side_set_params(i, len(sideSets[i]), 0)
         exodusFile.put_side_set(i, sideSets[i], sideSetSides[i])
 
 if sideSetNames:
     exodusFile.put_side_set_names(nodeSetNames)
 
-# Only want a single time step for this exodus file
-exodusFile.put_time(1, 0)
+# Only want a single time step (t = 0) for this exodus file
+timestep = 1
+time = 0
+exodusFile.put_time(timestep, time)
 
 # Add any elemental reservoir properties as elemental variables
 if model.elemVars:
@@ -143,7 +145,7 @@ if model.elemVars:
 
     for blkid in block_ids:
         for var in model.elemVars:
-            exodusFile.put_element_variable_values(blkid, var.lower(), 1, model.elemVars[var])
+            exodusFile.put_element_variable_values(blkid, var.lower(), timestep, model.elemVars[var])
 
     # Add elemental variables to sidesets as well
     exodusFile.set_side_set_variable_number(len(model.elemVars))
@@ -153,9 +155,10 @@ if model.elemVars:
         exodusFile.put_side_set_variable_name(var.lower(), var_counter)
         var_counter += 1
 
+    # Add elemental variable values at each side in each sideset
     for var in model.elemVars:
         for i in range(len(sideSets)):
-            exodusFile.put_side_set_variable_values(i, var.lower(), 1, model.elemVars[var].take(np.asarray(sideSets[i]) - 1))
+            exodusFile.put_side_set_variable_values(i, var.lower(), timestep, model.elemVars[var].take(np.asarray(sideSets[i]) - 1))
 
 # Add any nodal variable values
 if model.nodeVars:
@@ -167,7 +170,7 @@ if model.nodeVars:
         var_counter += 1
 
     for var in model.nodeVars:
-        exodusFile.put_node_variable_values(var.lower(), 1, model.nodeVars[var])
+        exodusFile.put_node_variable_values(var.lower(), timestep, model.nodeVars[var])
 
     # Add nodal variables to nodesets as well
     exodusFile.set_node_set_variable_number(len(model.nodeVars))
@@ -177,9 +180,10 @@ if model.nodeVars:
         exodusFile.put_node_set_variable_name(var.lower(), var_counter)
         var_counter += 1
 
+    # Add nodal variable values at each node in each nodeset
     for var in model.nodeVars:
         for i in range(len(nodeSets)):
-            exodusFile.put_node_set_variable_values(i, var.lower(), 1, model.nodeVars[var].take(np.asarray(nodeSets[i]) - 1))
+            exodusFile.put_node_set_variable_values(i, var.lower(), timestep, model.nodeVars[var].take(np.asarray(nodeSets[i]) - 1))
 
 # Finally, close the exodus file
 exodusFile.close()
