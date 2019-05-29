@@ -214,6 +214,6 @@ def parseEclipse(f):
     if 'SATNUM' in model.elemVars:
         model.blockIds = model.elemVars['SATNUM'].astype(int)
     else:
-        model.blockIds = np.zeros(numElems).astype(int)
+        model.blockIds = np.zeros(elemIds.size).astype(int)
 
     return model
