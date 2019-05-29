@@ -8,9 +8,6 @@ class ExodusModel(object):
         self._xcoords = []
         self._ycoords = []
         self._zcoords = []
-        self._nx = None
-        self._ny = None
-        self._nz = None
         self._nodeIds = None
         self._elemIds = None
         self._elemNodes = None
@@ -26,31 +23,6 @@ class ExodusModel(object):
     @dim.setter
     def dim(self, dim):
         self._dim = dim
-
-    # Number of elements in each direction
-    @property
-    def nx(self):
-        return self._nx
-
-    @nx.setter
-    def nx(self, num):
-        self._nx = num
-
-    @property
-    def ny(self):
-        return self._ny
-
-    @ny.setter
-    def ny(self, num):
-        self._ny = num
-
-    @property
-    def nz(self):
-        return self._nz
-
-    @nz.setter
-    def nz(self, num):
-        self._nz = num
 
     # Nodal coordinates in x, y and z directions
     @property

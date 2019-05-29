@@ -202,9 +202,6 @@ def parseEclipse(f):
 
     # Add data to the ExodusModel object
     model = ExodusModel()
-    model.nx = nx
-    model.ny = ny
-    model.nz = nz
     model.xcoords = xcoords
     model.ycoords = ycoords
     model.zcoords = zcoords
