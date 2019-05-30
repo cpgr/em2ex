@@ -12,8 +12,10 @@ import os
 # Read filename and options from commandline
 parser = argparse.ArgumentParser(description='Converts earth model to Exodus II format')
 parser.add_argument('filename')
-parser.add_argument('--filetype', default = None, dest='filetype',
+parser.add_argument('--filetype', default = None, dest = 'filetype',
     choices = ['eclipse', 'leapfrog'], help = 'Explicitly state the filetype for unknown extensions')
+parser.add_argument('--no-nodesets', dest = 'omit_nodesets', action = 'store_true', help = 'Disable addition of nodesets')
+parser.add_argument('--no-sidesets', dest = 'omit_sidesets', action = 'store_true', help = 'Disable addition of sidesets')
 args = parser.parse_args()
 
 # Extract file name and extension
