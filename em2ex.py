@@ -9,183 +9,196 @@ from readers import ExodusModel
 import argparse
 import os
 
-# Read filename and options from commandline
-parser = argparse.ArgumentParser(description='Converts earth model to Exodus II format')
-parser.add_argument('filename')
-parser.add_argument('--filetype', default = None, dest = 'filetype',
-    choices = ['eclipse', 'leapfrog'], help = 'Explicitly state the filetype for unknown extensions')
-parser.add_argument('--no-nodesets', dest = 'omit_nodesets', action = 'store_true', help = 'Disable addition of nodesets')
-parser.add_argument('--no-sidesets', dest = 'omit_sidesets', action = 'store_true', help = 'Disable addition of sidesets')
-args = parser.parse_args()
+def get_parser():
+    ''' Read commandline options and filename '''
 
-# Extract file name and extension
-filename = args.filename
-filename_base, file_extension = os.path.splitext(filename)
+    parser = argparse.ArgumentParser(description='Converts earth model to Exodus II format')
+    parser.add_argument('filename')
+    parser.add_argument('--filetype', default = None, dest = 'filetype',
+        choices = ['eclipse', 'leapfrog'], help = 'Explicitly state the filetype for unknown extensions')
+    parser.add_argument('--no-nodesets', dest = 'omit_nodesets', action = 'store_true', help = 'Disable addition of nodesets')
+    parser.add_argument('--no-sidesets', dest = 'omit_sidesets', action = 'store_true', help = 'Disable addition of sidesets')
 
-# Override the file extension in the input file using the --filetype argument
-if args.filetype == 'eclipse':
-    file_extension = '.grdecl'
+    return parser
 
-elif args.filetype == 'leapfrog':
-    file_extension = ''
+def main():
+    ''' Parse the Earth model and write out an Exodus II file '''
 
-# Parse the reservoir model using the appropriate reader
-if file_extension == ".grdecl":
-    model = eclipse.parseEclipse(filename)
+    # Parse commandline options
+    parser = get_parser()
+    args = parser.parse_args()
 
-elif file_extension == '':
-    model = leapfrog.parseLeapfrog(filename)
+    # Extract file name and extension
+    filename = args.filename
+    filename_base, file_extension = os.path.splitext(filename)
 
-else:
-    print 'File extension ', file_extension, ' not supported'
-    exit()
+    # Override the file extension in the input file using the --filetype argument
+    if args.filetype == 'eclipse':
+        file_extension = '.grdecl'
 
-# After parsing the reservoir model, the Exodus file can be written
-# Nodesets for the boundaries of the model (note: assumes 3D model)
-nodeSets = []
-nodeSets.append(model.nodeIds[0,:,:].flatten().tolist())
-nodeSets.append(model.nodeIds[:,0,:].flatten().tolist())
-nodeSets.append(model.nodeIds[:,:,0].flatten().tolist())
-nodeSets.append(model.nodeIds[:,:,-1].flatten().tolist())
-nodeSets.append(model.nodeIds[:,-1,:].flatten().tolist())
-nodeSets.append(model.nodeIds[-1,:,:].flatten().tolist())
+    elif args.filetype == 'leapfrog':
+        file_extension = ''
 
-# Sidesets for the boundaries of the model (note: assumes 3D model)
-sideSets = []
-sideSets.append(model.elemIds[0,:,:].flatten().tolist())
-sideSets.append(model.elemIds[:,0,:].flatten().tolist())
-sideSets.append(model.elemIds[:,:,0].flatten().tolist())
-sideSets.append(model.elemIds[:,:,-1].flatten().tolist())
-sideSets.append(model.elemIds[:,-1,:].flatten().tolist())
-sideSets.append(model.elemIds[-1:,:].flatten())
+    # Parse the reservoir model using the appropriate reader
+    if file_extension == ".grdecl":
+        model = eclipse.parseEclipse(filename)
 
-# Sideset side numbers (note: assumes 3D model)
-sideSetSides = []
-sideSetSides.append([5]*len(sideSets[0]))
-sideSetSides.append([1]*len(sideSets[1]))
-sideSetSides.append([4]*len(sideSets[2]))
-sideSetSides.append([2]*len(sideSets[3]))
-sideSetSides.append([3]*len(sideSets[4]))
-sideSetSides.append([6]*len(sideSets[5]))
+    elif file_extension == '':
+        model = leapfrog.parseLeapfrog(filename)
 
-# Names for each nodeset and sideset
-nodeSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
-sideSetNames = nodeSetNames
+    else:
+        print 'File extension ', file_extension, ' not supported'
+        exit()
 
-# Model dimension (default is 3)
-numDim = model.dim
+    # After parsing the reservoir model, the Exodus file can be written
+    # Nodesets for the boundaries of the model (note: assumes 3D model)
+    nodeSets = []
+    nodeSets.append(model.nodeIds[0,:,:].flatten().tolist())
+    nodeSets.append(model.nodeIds[:,0,:].flatten().tolist())
+    nodeSets.append(model.nodeIds[:,:,0].flatten().tolist())
+    nodeSets.append(model.nodeIds[:,:,-1].flatten().tolist())
+    nodeSets.append(model.nodeIds[:,-1,:].flatten().tolist())
+    nodeSets.append(model.nodeIds[-1,:,:].flatten().tolist())
 
-numNodes = model.nodeIds.size
-numElems = model.elemIds.size
-numNodeSets = 6
-numSideSets = 6
+    # Sidesets for the boundaries of the model (note: assumes 3D model)
+    sideSets = []
+    sideSets.append(model.elemIds[0,:,:].flatten().tolist())
+    sideSets.append(model.elemIds[:,0,:].flatten().tolist())
+    sideSets.append(model.elemIds[:,:,0].flatten().tolist())
+    sideSets.append(model.elemIds[:,:,-1].flatten().tolist())
+    sideSets.append(model.elemIds[:,-1,:].flatten().tolist())
+    sideSets.append(model.elemIds[-1:,:].flatten())
 
-# The number of blocks is equal to the unique numbers of block ids
-blocks = model.blockIds
-block_ids = np.unique(blocks)
-numBlocks = len(block_ids)
+    # Sideset side numbers (note: assumes 3D model)
+    sideSetSides = []
+    sideSetSides.append([5]*len(sideSets[0]))
+    sideSetSides.append([1]*len(sideSets[1]))
+    sideSetSides.append([4]*len(sideSets[2]))
+    sideSetSides.append([2]*len(sideSets[3]))
+    sideSetSides.append([3]*len(sideSets[4]))
+    sideSetSides.append([6]*len(sideSets[5]))
 
-exodusTitle = 'Converted from ' + filename + ' by em2ex.py'
+    # Names for each nodeset and sideset
+    nodeSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
+    sideSetNames = nodeSetNames
 
-coordNames = ["x", "y", "z"]
-elemType = 'HEX8'
-nodesPerElem = 8
+    # Model dimension (default is 3)
+    numDim = model.dim
 
-# Write the exodus file using the exodus python API
-exodusFile = exodus(filename_base + '.e',
-                    'w',
-                    'numpy',
-                    exodusTitle,
-                    numDim,
-                    numNodes,
-                    numElems,
-                    numBlocks,
-                    numNodeSets,
-                    numSideSets)
+    numNodes = model.nodeIds.size
+    numElems = model.elemIds.size
+    numNodeSets = 6
+    numSideSets = 6
 
-exodusFile.put_coord_names(coordNames)
-exodusFile.put_coords(model.xcoords, model.ycoords, model.zcoords)
+    # The number of blocks is equal to the unique numbers of block ids
+    blocks = model.blockIds
+    block_ids = np.unique(blocks)
+    numBlocks = len(block_ids)
 
-exodusFile.put_node_id_map(np.arange(1, numNodes+1))
-exodusFile.put_elem_id_map(np.arange(1, numElems+1))
+    exodusTitle = 'Converted from ' + filename + ' by em2ex.py'
 
-exodusFile.put_elem_blk_names(block_ids.astype(str))
+    coordNames = ["x", "y", "z"]
+    elemType = 'HEX8'
+    nodesPerElem = 8
 
-# Put all the element connectivities per block
-for blkid in block_ids:
-    numElemsInBlock = blocks[blocks==blkid].size
-    exodusFile.put_elem_blk_info(blkid, elemType, numElemsInBlock, nodesPerElem, 0)
-    exodusFile.put_elem_connectivity(blkid, model.elemNodes[blocks.flatten()==blkid].flatten())
+    # Write the exodus file using the exodus python API
+    exodusFile = exodus(filename_base + '.e',
+                        'w',
+                        'numpy',
+                        exodusTitle,
+                        numDim,
+                        numNodes,
+                        numElems,
+                        numBlocks,
+                        numNodeSets,
+                        numSideSets)
 
-for i in range(len(nodeSets)):
-        exodusFile.put_node_set_params(i, len(nodeSets[i]))
-        exodusFile.put_node_set(i, nodeSets[i])
+    exodusFile.put_coord_names(coordNames)
+    exodusFile.put_coords(model.xcoords, model.ycoords, model.zcoords)
 
-if nodeSetNames:
-    exodusFile.put_node_set_names(nodeSetNames)
+    exodusFile.put_node_id_map(np.arange(1, numNodes+1))
+    exodusFile.put_elem_id_map(np.arange(1, numElems+1))
 
-for i in range(len(sideSets)):
-        exodusFile.put_side_set_params(i, len(sideSets[i]), 0)
-        exodusFile.put_side_set(i, sideSets[i], sideSetSides[i])
+    exodusFile.put_elem_blk_names(block_ids.astype(str))
 
-if sideSetNames:
-    exodusFile.put_side_set_names(nodeSetNames)
-
-# Only want a single time step (t = 0) for this exodus file
-timestep = 1
-time = 0
-exodusFile.put_time(timestep, time)
-
-# Add any elemental reservoir properties as elemental variables
-if model.elemVars:
-    exodusFile.set_element_variable_number(len(model.elemVars))
-
-    var_counter = 1
-    for var in model.elemVars:
-        exodusFile.put_element_variable_name(var.lower(), var_counter)
-        var_counter += 1
-
+    # Put all the element connectivities per block
     for blkid in block_ids:
+        numElemsInBlock = blocks[blocks==blkid].size
+        exodusFile.put_elem_blk_info(blkid, elemType, numElemsInBlock, nodesPerElem, 0)
+        exodusFile.put_elem_connectivity(blkid, model.elemNodes[blocks.flatten()==blkid].flatten())
+
+    for i in range(len(nodeSets)):
+            exodusFile.put_node_set_params(i, len(nodeSets[i]))
+            exodusFile.put_node_set(i, nodeSets[i])
+
+    if nodeSetNames:
+        exodusFile.put_node_set_names(nodeSetNames)
+
+    for i in range(len(sideSets)):
+            exodusFile.put_side_set_params(i, len(sideSets[i]), 0)
+            exodusFile.put_side_set(i, sideSets[i], sideSetSides[i])
+
+    if sideSetNames:
+        exodusFile.put_side_set_names(nodeSetNames)
+
+    # Only want a single time step (t = 0) for this exodus file
+    timestep = 1
+    time = 0
+    exodusFile.put_time(timestep, time)
+
+    # Add any elemental reservoir properties as elemental variables
+    if model.elemVars:
+        exodusFile.set_element_variable_number(len(model.elemVars))
+
+        var_counter = 1
         for var in model.elemVars:
-            exodusFile.put_element_variable_values(blkid, var.lower(), timestep, model.elemVars[var])
+            exodusFile.put_element_variable_name(var.lower(), var_counter)
+            var_counter += 1
 
-    # Add elemental variables to sidesets as well
-    exodusFile.set_side_set_variable_number(len(model.elemVars))
+        for blkid in block_ids:
+            for var in model.elemVars:
+                exodusFile.put_element_variable_values(blkid, var.lower(), timestep, model.elemVars[var])
 
-    var_counter = 1
-    for var in model.elemVars:
-        exodusFile.put_side_set_variable_name(var.lower(), var_counter)
-        var_counter += 1
+        # Add elemental variables to sidesets as well
+        exodusFile.set_side_set_variable_number(len(model.elemVars))
 
-    # Add elemental variable values at each side in each sideset
-    for var in model.elemVars:
-        for i in range(len(sideSets)):
-            exodusFile.put_side_set_variable_values(i, var.lower(), timestep, model.elemVars[var].take(np.asarray(sideSets[i]) - 1))
+        var_counter = 1
+        for var in model.elemVars:
+            exodusFile.put_side_set_variable_name(var.lower(), var_counter)
+            var_counter += 1
 
-# Add any nodal variable values
-if model.nodeVars:
-    exodusFile.set_node_variable_number(len(model.nodeVars))
+        # Add elemental variable values at each side in each sideset
+        for var in model.elemVars:
+            for i in range(len(sideSets)):
+                exodusFile.put_side_set_variable_values(i, var.lower(), timestep, model.elemVars[var].take(np.asarray(sideSets[i]) - 1))
 
-    var_counter = 1
-    for var in model.nodeVars:
-        exodusFile.put_node_variable_name(var.lower(), var_counter)
-        var_counter += 1
+    # Add any nodal variable values
+    if model.nodeVars:
+        exodusFile.set_node_variable_number(len(model.nodeVars))
 
-    for var in model.nodeVars:
-        exodusFile.put_node_variable_values(var.lower(), timestep, model.nodeVars[var])
+        var_counter = 1
+        for var in model.nodeVars:
+            exodusFile.put_node_variable_name(var.lower(), var_counter)
+            var_counter += 1
 
-    # Add nodal variables to nodesets as well
-    exodusFile.set_node_set_variable_number(len(model.nodeVars))
+        for var in model.nodeVars:
+            exodusFile.put_node_variable_values(var.lower(), timestep, model.nodeVars[var])
 
-    var_counter = 1
-    for var in model.nodeVars:
-        exodusFile.put_node_set_variable_name(var.lower(), var_counter)
-        var_counter += 1
+        # Add nodal variables to nodesets as well
+        exodusFile.set_node_set_variable_number(len(model.nodeVars))
 
-    # Add nodal variable values at each node in each nodeset
-    for var in model.nodeVars:
-        for i in range(len(nodeSets)):
-            exodusFile.put_node_set_variable_values(i, var.lower(), timestep, model.nodeVars[var].take(np.asarray(nodeSets[i]) - 1))
+        var_counter = 1
+        for var in model.nodeVars:
+            exodusFile.put_node_set_variable_name(var.lower(), var_counter)
+            var_counter += 1
 
-# Finally, close the exodus file
-exodusFile.close()
+        # Add nodal variable values at each node in each nodeset
+        for var in model.nodeVars:
+            for i in range(len(nodeSets)):
+                exodusFile.put_node_set_variable_values(i, var.lower(), timestep, model.nodeVars[var].take(np.asarray(nodeSets[i]) - 1))
+
+    # Finally, close the exodus file
+    exodusFile.close()
+
+if __name__ == '__main__':
+    main()
