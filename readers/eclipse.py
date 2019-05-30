@@ -2,7 +2,7 @@
 
 import numpy as np
 from ExodusModel import ExodusModel
-from nodeutils import addNode
+from reader_utils import addNode
 
 def readBlock(f):
     '''Reads block of data and returns it as a list'''
@@ -49,7 +49,7 @@ def readKeyword(f, keyword):
 
     return block
 
-def parseEclipse(f):
+def parseEclipse(f, args):
     '''Parse the ECLIPSE file and return node coordinates and material properties'''
 
     # Keywords that may be read in the Eclipse file
@@ -108,7 +108,8 @@ def parseEclipse(f):
         print "No ZCORN data found in ", f
         exit()
 
-    # The number of elements in the x, y and z directions are specified in the SPECGRID data
+    # The number of elements in the x, y and z directions are specified in the
+    # SPECGRID data
     nx = int(specgridlist[0])
     ny = int(specgridlist[1])
     nz = int(specgridlist[2])
@@ -136,54 +137,62 @@ def parseEclipse(f):
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
     coord = np.asarray(coordlist).reshape(ny+1, nx+1,6)
 
-    # The ZCORN data varies by x, y and then z. Reshape it into an array where the first index gives the layer, the second the y coordinates and the third the x coordinates
+    # The ZCORN data varies by x, y and then z. Reshape it into an array where
+    # the first index gives the layer, the second the y coordinates and the third
+    # the x coordinates
     zcorn = np.asarray(zcornlist).reshape(2*nz, 2*ny, 2*nx)
     # Also make sure that zcorn is in increasing z order
     zcorn.sort(axis=0)
 
-    # The x and y data are taken from the COORD data. These are repeated nz+1 times. The z data is taken
-    # from the ZCORN data, noting that it is repeated for each internal corner.
+    # The x and y data are taken from the COORD data. These are repeated nz+1 times.
+    # The z data is taken from the ZCORN data, noting that it is repeated for each
+    # internal corner.
     xdata = np.asarray([coord[:,:,0]] * (nz+1))
     ydata = np.asarray([coord[:,:,1]] * (nz+1))
     zdata = np.pad(zcorn, ((0,1), (0,1), (0,1)),'edge')[::2,::2,::2]
 
-    # Loop through the elements and add the node numbers following the right-hand rule,
-    # starting at 1. Also construct the element connectivity array
+    # Loop through the active elements and add the node numbers following the
+    # right-hand rule, starting at 1. Also construct the element connectivity array
     nodeIds = np.zeros((nz+1, ny+1, nx+1), dtype=int)
-    elemNodes = np.zeros((nz*ny*nx, 8), dtype=int)
+    elemNodes = np.zeros((num_active_elements, 8), dtype=int)
     elemIds = np.zeros((nz, ny, nx), dtype=int)
 
+    # Exodus node numbering starts at one
     nodenum = 1
     elemnum = 0
     for k in xrange(0,nz):
         for j in xrange(0,ny):
             for i in xrange(0,nx):
-                # Label all the nodes for this element
-                nodenum = addNode(nodeIds, i, j, k, nodenum)
-                nodenum = addNode(nodeIds, i+1, j, k, nodenum)
-                nodenum = addNode(nodeIds, i+1, j+1, k, nodenum)
-                nodenum = addNode(nodeIds, i, j+1, k, nodenum)
-                nodenum = addNode(nodeIds, i, j, k+1, nodenum)
-                nodenum = addNode(nodeIds, i+1, j, k+1, nodenum)
-                nodenum = addNode(nodeIds, i+1, j+1, k+1, nodenum)
-                nodenum = addNode(nodeIds, i, j+1, k+1, nodenum)
+                # Only label nodes for active elements
+                if active_elements[k, j, i]:
+                    # Label all the nodes for this element
+                    nodenum = addNode(nodeIds, i, j, k, nodenum)
+                    nodenum = addNode(nodeIds, i+1, j, k, nodenum)
+                    nodenum = addNode(nodeIds, i+1, j+1, k, nodenum)
+                    nodenum = addNode(nodeIds, i, j+1, k, nodenum)
+                    nodenum = addNode(nodeIds, i, j, k+1, nodenum)
+                    nodenum = addNode(nodeIds, i+1, j, k+1, nodenum)
+                    nodenum = addNode(nodeIds, i+1, j+1, k+1, nodenum)
+                    nodenum = addNode(nodeIds, i, j+1, k+1, nodenum)
 
     for k in xrange(0,nz):
         for j in xrange(0,ny):
             for i in xrange(0,nx):
-                # Add the nodes for this element to the connectivity array
-                elemNodes[elemnum, 0] = nodeIds[k, j, i]
-                elemNodes[elemnum, 1] = nodeIds[k, j, i+1]
-                elemNodes[elemnum, 2] = nodeIds[k, j+1, i+1]
-                elemNodes[elemnum, 3] = nodeIds[k, j+1, i]
-                elemNodes[elemnum, 4] = nodeIds[k+1, j, i]
-                elemNodes[elemnum, 5] = nodeIds[k+1, j, i+1]
-                elemNodes[elemnum, 6] = nodeIds[k+1, j+1, i+1]
-                elemNodes[elemnum, 7] = nodeIds[k+1, j+1, i]
+                # Only consider active elements
+                if active_elements[k, j, i]:
+                    # Add the nodes for this element to the connectivity array
+                    elemNodes[elemnum, 0] = nodeIds[k, j, i]
+                    elemNodes[elemnum, 1] = nodeIds[k, j, i+1]
+                    elemNodes[elemnum, 2] = nodeIds[k, j+1, i+1]
+                    elemNodes[elemnum, 3] = nodeIds[k, j+1, i]
+                    elemNodes[elemnum, 4] = nodeIds[k+1, j, i]
+                    elemNodes[elemnum, 5] = nodeIds[k+1, j, i+1]
+                    elemNodes[elemnum, 6] = nodeIds[k+1, j+1, i+1]
+                    elemNodes[elemnum, 7] = nodeIds[k+1, j+1, i]
 
-                # Also the array of element ids
-                elemIds[k,j,i] = elemnum + 1
-                elemnum+=1
+                    # Also the array of element ids
+                    elemIds[k,j,i] = elemnum + 1
+                    elemnum+=1
 
     # Order the coordinates according to the node numbering
     xcoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))

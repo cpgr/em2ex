@@ -5,7 +5,7 @@
 import numpy as np
 from readers import eclipse, leapfrog
 from exodus import exodus
-from readers import ExodusModel
+from exodus_model import ExodusModel
 import argparse
 import os
 
@@ -41,10 +41,10 @@ def main():
 
     # Parse the reservoir model using the appropriate reader
     if file_extension == ".grdecl":
-        model = eclipse.parseEclipse(filename)
+        model = eclipse.parseEclipse(filename, args)
 
     elif file_extension == '':
-        model = leapfrog.parseLeapfrog(filename)
+        model = leapfrog.parseLeapfrog(filename, args)
 
     else:
         print 'File extension ', file_extension, ' not supported'

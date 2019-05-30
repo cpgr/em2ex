@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import re
 from ExodusModel import ExodusModel
-from nodeutils import addNode
+from reader_utils import addNode
 
-def parseLeapfrog(f):
+def parseLeapfrog(f, args):
     '''Parse the Leapfrog file and return node coordinates and material properties'''
 
     # The number of elements in the x, y and z directions are specified on line 6 of the Leapfrog export CSV
@@ -131,8 +131,6 @@ def parseLeapfrog(f):
     ycoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
     zcoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
 
-    print len(xcoords)
-    print len(zcoords)
     n = 0
     for k in range(0,nz+1):
         for j in range(0,ny+1):
@@ -145,7 +143,6 @@ def parseLeapfrog(f):
                 zcoords[nid-1] = zdata[k,j,i]
                 node_list[n] = nid
                 n += 1
-
 
     node_order = np.asarray(node_list)
     pressure = np.asarray(node_file['pressure'])  # can add .tolist() to mke these lists
