@@ -5,15 +5,20 @@ class ExodusModel(object):
 
     def __init__(self, dim = 3):
         self._dim = dim
-        self._xcoords = []
-        self._ycoords = []
-        self._zcoords = []
+        self._xcoords = None
+        self._ycoords = None
+        self._zcoords = None
         self._nodeIds = None
         self._elemIds = None
         self._elemNodes = None
         self._elemVars = None
         self._nodeVars = None
         self._blockIds = None
+        self._sideSetNames = None
+        self._sideSets = None
+        self._sideSetSides = None
+        self._nodeSetNames = None
+        self._nodeSets = None
 
     # Dimension
     @property
@@ -102,3 +107,48 @@ class ExodusModel(object):
     @blockIds.setter
     def blockIds(self, ids):
         self._blockIds = ids
+
+    # Sideset names
+    @property
+    def sideSetNames(self):
+        return self._sideSetNames
+
+    @sideSetNames.setter
+    def sideSetNames(self, names):
+        self._sideSetNames = names
+
+    # Sidesets (list of elements in sideset)
+    @property
+    def sideSets(self):
+        return self._sideSets
+
+    @sideSets.setter
+    def sideSets(self, sidesets):
+        self._sideSets = sidesets
+
+    # Sideset sides (number associated with each sideset)
+    @property
+    def sideSetSides(self):
+        return self._sideSetSides
+
+    @sideSetSides.setter
+    def sideSetSides(self, sidesetsides):
+        self._sideSetSides = sidesetsides
+
+    # Nodeset names
+    @property
+    def nodeSetNames(self):
+        return self._nodeSetNames
+
+    @nodeSetNames.setter
+    def nodeSetNames(self, names):
+        self._nodeSetNames = names
+
+    # Nodesets
+    @property
+    def nodeSets(self):
+        return self._nodeSets
+
+    @nodeSets.setter
+    def nodeSets(self, nodesets):
+        self._nodeSets = nodesets

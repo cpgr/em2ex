@@ -2,7 +2,7 @@
 
 import numpy as np
 from ExodusModel import ExodusModel
-from reader_utils import addNode
+from reader_utils import *
 
 def readBlock(f):
     '''Reads block of data and returns it as a list'''
@@ -234,5 +234,22 @@ def parseEclipse(f, args):
         model.blockIds = model.elemVars['SATNUM'].astype(int)
     else:
         model.blockIds = np.zeros(elemIds.size).astype(int)
+
+    if not args.omit_sidesets:
+        # Sideset names
+        model.sideSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
+
+        # Sidesets for the boundaries of the model (note: assumes 3D model)
+        model.sideSets = addSideSets(model.elemIds)
+
+        # Sideset side numbers (note: assumes 3D model)
+        model.sideSetSides = addSideSetSides(model.sideSets)
+
+    if not args.omit_nodesets:
+        # Nodesets
+        model.nodeSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
+
+        # Nodesets for the boundaries of the model (note: assumes 3D model)
+        model.nodeSets = addNodeSets(model.nodeIds)
 
     return model
