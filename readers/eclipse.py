@@ -151,6 +151,16 @@ def parseEclipse(f, args):
     ydata = np.asarray([coord[:,:,1]] * (nz+1))
     zdata = np.pad(zcorn, ((0,1), (0,1), (0,1)),'edge')[::2,::2,::2]
 
+    # Some elements may be inactive (ACTNUM = 0), so don't count them
+    if 'ACTNUM' in elemProps:
+        active_elements = elemProps['ACTNUM'].reshape(nz, ny, nx)
+    else:
+        # All elements are active
+        active_elements = np.ones((nz, ny, nx))
+
+    # The number of active elements is
+    num_active_elements = np.count_nonzero(active_elements)
+
     # Loop through the active elements and add the node numbers following the
     # right-hand rule, starting at 1. Also construct the element connectivity array
     nodeIds = np.zeros((nz+1, ny+1, nx+1), dtype=int)
