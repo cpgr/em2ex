@@ -18,7 +18,7 @@ def get_parser():
         choices = ['eclipse', 'leapfrog'], help = 'Explicitly state the filetype for unknown extensions')
     parser.add_argument('--no-nodesets', dest = 'omit_nodesets', action = 'store_true', help = 'Disable addition of nodesets')
     parser.add_argument('--no-sidesets', dest = 'omit_sidesets', action = 'store_true', help = 'Disable addition of sidesets')
-
+    parser.add_argument('-f', '--force', dest = 'force_overwrite', action = 'store_true', help = 'Overwrite filename.e if it exists')
     return parser
 
 def main():
@@ -71,8 +71,17 @@ def main():
     elemType = 'HEX8'
     nodesPerElem = 8
 
+    # If force_overwrite, then clobber any exisiting filename_base.e file
+    output_file = filename_base + '.e'
+
+    if args.force_overwrite:
+        try:
+            os.remove(output_file)
+        except:
+            print("Cannot delete ", output_file)
+
     # Write the exodus file using the exodus python API
-    exodusFile = exodus(filename_base + '.e',
+    exodusFile = exodus(output_file,
                         'w',
                         'numpy',
                         exodusTitle,
