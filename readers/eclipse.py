@@ -1,7 +1,7 @@
 # Functions to read Eclipse grdecl files and parse the input
 
 import numpy as np
-from ExodusModel import ExodusModel
+from exodus_model.ExodusModel import ExodusModel
 from reader_utils import *
 
 def readBlock(f):

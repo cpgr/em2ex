@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 import re
-from ExodusModel import ExodusModel
+from exodus_model.ExodusModel import ExodusModel
 from reader_utils import *
 
 def parseLeapfrog(f, args):
