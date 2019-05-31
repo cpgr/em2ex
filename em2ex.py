@@ -95,9 +95,6 @@ def main():
     exodusFile.put_coord_names(coordNames)
     exodusFile.put_coords(model.xcoords, model.ycoords, model.zcoords)
 
-    exodusFile.put_node_id_map(np.arange(1, numNodes+1))
-    exodusFile.put_elem_id_map(np.arange(1, numElems+1))
-
     exodusFile.put_elem_blk_names(block_ids.astype(str))
 
     # Put all the element connectivities per block
