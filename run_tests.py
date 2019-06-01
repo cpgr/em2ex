@@ -90,7 +90,7 @@ def exodiff_test(key):
         subprocess.check_output(['exodiff', '-quiet', exodus_filename, gold_filename])
 
     except subprocess.CalledProcessError:
-        raise Em2exException( filepath + '/' + key + ': exodiff failed - files are different')
+        raise Em2exException(key + ': exodiff failed - files are different')
 
     return
 

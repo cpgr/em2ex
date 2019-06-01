@@ -55,10 +55,10 @@ def main():
     numDim = model.dim
 
     # Number of nodes, elements, sidesets and nodesets
-    numNodes = model.nodeIds.size
-    numElems = model.elemIds.size
-    numNodeSets = len(model.nodeSets)
-    numSideSets = len(model.sideSets)
+    numNodes = model.numNodes
+    numElems = model.numElems
+    numNodeSets = model.numNodeSets
+    numSideSets = model.numSideSets
 
     # The number of blocks is equal to the unique numbers of block ids
     blocks = model.blockIds

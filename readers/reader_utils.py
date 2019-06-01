@@ -1,4 +1,5 @@
-# Function to assign node numbers while avoiding duplicates
+import numpy as np
+from exodus_model.ExodusModel import ExodusModel
 
 def addNode(array, i, j, k, count):
     ''' Utility to generate unique node numbers using right-hand rule '''
@@ -11,22 +12,30 @@ def addNode(array, i, j, k, count):
         # Node has already been numbered
         return count
 
-def addSideSets(elemIds):
+def addSideSets(model):
     ''' Utility to determine elements in sidesets from array of element ids '''
 
     # Sidesets for the boundaries of the model (note: assumes 3D model)
     sideSets = []
-    sideSets.append(elemIds[0,:,:].flatten().tolist())
-    sideSets.append(elemIds[:,0,:].flatten().tolist())
-    sideSets.append(elemIds[:,:,0].flatten().tolist())
-    sideSets.append(elemIds[:,:,-1].flatten().tolist())
-    sideSets.append(elemIds[:,-1,:].flatten().tolist())
-    sideSets.append(elemIds[-1:,:].flatten().tolist())
 
-    return sideSets
+    # Copy the elemIds to avoid changing elemIds (arrays arguments are mutable)
+    ids = np.copy(model.elemIds)
 
-def addSideSetSides(sideSets):
-    ''' Utility to add sideset IDs from list of sidesets '''
+    # XY planes
+    sideSets.append(nonZeroValues(ids))
+    sideSets.append(nonZeroValues(np.flip(ids, axis=0)))
+
+    # YZ planes
+    ids = np.copy(model.elemIds)
+    ids = np.rot90(ids, axes=(0,1))
+    sideSets.insert(1, nonZeroValues(ids))
+    sideSets.insert(1, nonZeroValues(np.flip(ids, axis=0)))
+
+    # XZ planes
+    ids = np.copy(model.elemIds)
+    ids = np.rot90(ids, axes=(0,2))
+    sideSets.insert(2, nonZeroValues(ids))
+    sideSets.insert(2, nonZeroValues(np.flip(ids, axis=0)))
 
     # Sideset side numbers (note: assumes 3D model)
     sideSetSides = []
@@ -37,18 +46,69 @@ def addSideSetSides(sideSets):
     sideSetSides.append([3] * len(sideSets[4]))
     sideSetSides.append([6] * len(sideSets[5]))
 
-    return sideSetSides
+    # Add sidesets to model
+    # Sideset names
+    model.sideSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
 
-def addNodeSets(nodeIds):
+    # Sidesets for the boundaries of the model
+    model.sideSets = sideSets
+
+    # Sideset side numbers
+    model.sideSetSides = sideSetSides
+
+    # Number of sidesets
+    model.numSideSets = len(sideSets)
+
+    return
+
+def addNodeSets(model):
     ''' Utility to determine nodes in nodesets from array of node ids '''
 
     # Nodesets for the boundaries of the model (note: assumes 3D model)
     nodeSets = []
-    nodeSets.append(nodeIds[0,:,:].flatten().tolist())
-    nodeSets.append(nodeIds[:,0,:].flatten().tolist())
-    nodeSets.append(nodeIds[:,:,0].flatten().tolist())
-    nodeSets.append(nodeIds[:,:,-1].flatten().tolist())
-    nodeSets.append(nodeIds[:,-1,:].flatten().tolist())
-    nodeSets.append(nodeIds[-1,:,:].flatten().tolist())
 
-    return nodeSets
+    # Copy the elemIds to avoid changing elemIds (arrays arguments are mutable)
+    ids = np.copy(model.nodeIds)
+
+    # XY planes
+    nodeSets.append(nonZeroValues(ids))
+    nodeSets.append(nonZeroValues(np.flip(ids, axis=0)))
+
+    # YZ planes
+    ids = np.copy(model.nodeIds)
+    ids = np.rot90(ids, axes=(0,1))
+    nodeSets.insert(1, nonZeroValues(ids))
+    nodeSets.insert(1, nonZeroValues(np.flip(ids, axis=0)))
+
+    # XZ planes
+    ids = np.copy(model.nodeIds)
+    ids = np.rot90(ids, axes=(0,2))
+    nodeSets.insert(2, nonZeroValues(ids))
+    nodeSets.insert(2, nonZeroValues(np.flip(ids, axis=0)))
+
+    # Add nodesets to model
+    model.nodeSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
+
+    # Nodesets for the boundaries of the model (note: assumes 3D model)
+    model.nodeSets = nodeSets
+
+    # Number of nodesets
+    model.numNodeSets = len(nodeSets)
+
+    return
+
+def nonZeroValues(arr):
+    ''' Utility to determine first non-zero values in the top plane of an array '''
+
+    values = []
+
+    for i in range(0, arr.shape[1]):
+        for j in range(0, arr.shape[2]):
+            if arr[0, i, j] > 0:
+                values.append(arr[0,i,j])
+            else:
+                # descend in column [:,i,j] until a non-zero value is found
+                if arr[:, i, j][arr[:, i, j]>0].size > 0:
+                    values.append(arr[:, i, j][arr[:, i, j]>0][0])
+
+    return sorted(values)

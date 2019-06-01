@@ -167,12 +167,12 @@ def parseEclipse(f, args):
     elemNodes = np.zeros((num_active_elements, 8), dtype=int)
     elemIds = np.zeros((nz, ny, nx), dtype=int)
 
-    # Exodus node numbering starts at one
+    # Exodus node and element numbering starts at one
     nodenum = 1
-    elemnum = 0
-    for k in xrange(0,nz):
-        for j in xrange(0,ny):
-            for i in xrange(0,nx):
+    elemnum = 1
+    for k in xrange(0, nz):
+        for j in xrange(0, ny):
+            for i in xrange(0, nx):
                 # Only label nodes for active elements
                 if active_elements[k, j, i]:
                     # Label all the nodes for this element
@@ -185,39 +185,47 @@ def parseEclipse(f, args):
                     nodenum = addNode(nodeIds, i+1, j+1, k+1, nodenum)
                     nodenum = addNode(nodeIds, i, j+1, k+1, nodenum)
 
-    for k in xrange(0,nz):
-        for j in xrange(0,ny):
-            for i in xrange(0,nx):
+    # The number of active nodes is
+    num_active_nodes = np.count_nonzero(nodeIds)
+
+    for k in xrange(0, nz):
+        for j in xrange(0, ny):
+            for i in xrange(0, nx):
                 # Only consider active elements
                 if active_elements[k, j, i]:
                     # Add the nodes for this element to the connectivity array
-                    elemNodes[elemnum, 0] = nodeIds[k, j, i]
-                    elemNodes[elemnum, 1] = nodeIds[k, j, i+1]
-                    elemNodes[elemnum, 2] = nodeIds[k, j+1, i+1]
-                    elemNodes[elemnum, 3] = nodeIds[k, j+1, i]
-                    elemNodes[elemnum, 4] = nodeIds[k+1, j, i]
-                    elemNodes[elemnum, 5] = nodeIds[k+1, j, i+1]
-                    elemNodes[elemnum, 6] = nodeIds[k+1, j+1, i+1]
-                    elemNodes[elemnum, 7] = nodeIds[k+1, j+1, i]
+                    elemNodes[elemnum - 1, 0] = nodeIds[k, j, i]
+                    elemNodes[elemnum - 1, 1] = nodeIds[k, j, i+1]
+                    elemNodes[elemnum - 1, 2] = nodeIds[k, j+1, i+1]
+                    elemNodes[elemnum - 1, 3] = nodeIds[k, j+1, i]
+                    elemNodes[elemnum - 1, 4] = nodeIds[k+1, j, i]
+                    elemNodes[elemnum - 1, 5] = nodeIds[k+1, j, i+1]
+                    elemNodes[elemnum - 1, 6] = nodeIds[k+1, j+1, i+1]
+                    elemNodes[elemnum - 1, 7] = nodeIds[k+1, j+1, i]
 
                     # Also the array of element ids
-                    elemIds[k,j,i] = elemnum + 1
+                    elemIds[k,j,i] = elemnum
                     elemnum+=1
 
     # Order the coordinates according to the node numbering
-    xcoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
-    ycoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
-    zcoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
+    xcoords = np.zeros(num_active_nodes)
+    ycoords = np.zeros(num_active_nodes)
+    zcoords = np.zeros(num_active_nodes)
 
-    for k in xrange(0,nz+1):
-        for j in xrange(0,ny+1):
-            for i in xrange(0,nx+1):
+    for k in xrange(0, nz+1):
+        for j in xrange(0, ny+1):
+            for i in xrange(0, nx+1):
                 # Get the node number corresponding to i,j,k
                 # Note that the array position is node_id - 1
                 nid = nodeIds[k,j,i]
-                xcoords[nid-1] = xdata[k,j,i]
-                ycoords[nid-1] = ydata[k,j,i]
-                zcoords[nid-1] = zdata[k,j,i]
+                if nid != 0:
+                    xcoords[nid-1] = xdata[k,j,i]
+                    ycoords[nid-1] = ydata[k,j,i]
+                    zcoords[nid-1] = zdata[k,j,i]
+
+    # Remove elemental properties in inactive elements
+    for prop in elemProps:
+        elemProps[prop] = elemProps[prop][active_elements.flatten() > 0]
 
     # Add data to the ExodusModel object
     model = ExodusModel()
@@ -228,28 +236,25 @@ def parseEclipse(f, args):
     model.elemIds = elemIds
     model.elemNodes = elemNodes
     model.elemVars = elemProps
+    model.numElems = num_active_elements
+    model.numNodes = num_active_nodes
 
     # Block ids for the mesh
     if 'SATNUM' in model.elemVars:
         model.blockIds = model.elemVars['SATNUM'].astype(int)
     else:
-        model.blockIds = np.zeros(elemIds.size).astype(int)
+        model.blockIds = np.zeros(num_active_elements).astype(int)
 
-    if not args.omit_sidesets:
-        # Sideset names
-        model.sideSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
+    # Add sidesets if required
+    if args.omit_sidesets:
+        model.numSideSets = 0
+    else:
+        addSideSets(model)
 
-        # Sidesets for the boundaries of the model (note: assumes 3D model)
-        model.sideSets = addSideSets(model.elemIds)
-
-        # Sideset side numbers (note: assumes 3D model)
-        model.sideSetSides = addSideSetSides(model.sideSets)
-
-    if not args.omit_nodesets:
-        # Nodesets
-        model.nodeSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
-
-        # Nodesets for the boundaries of the model (note: assumes 3D model)
-        model.nodeSets = addNodeSets(model.nodeIds)
+    # Add nodesets if required
+    if args.omit_nodesets:
+        model.numNodeSets = 0
+    else:
+        addNodeSets(model)
 
     return model

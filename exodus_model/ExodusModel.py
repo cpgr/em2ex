@@ -19,6 +19,10 @@ class ExodusModel(object):
         self._sideSetSides = None
         self._nodeSetNames = None
         self._nodeSets = None
+        self._numNodes = None
+        self._numElems = None
+        self._numSideSets = None
+        self._numNodeSets = None
 
     # Dimension
     @property
@@ -152,3 +156,39 @@ class ExodusModel(object):
     @nodeSets.setter
     def nodeSets(self, nodesets):
         self._nodeSets = nodesets
+
+    # Number of nodes
+    @property
+    def numNodes(self):
+        return self._numNodes
+
+    @numNodes.setter
+    def numNodes(self, num):
+        self._numNodes = num
+
+    # Number of elements
+    @property
+    def numElems(self):
+        return self._numElems
+
+    @numElems.setter
+    def numElems(self, num):
+        self._numElems = num
+
+    # Number of sidesets
+    @property
+    def numSideSets(self):
+        return self._numSideSets
+
+    @numSideSets.setter
+    def numSideSets(self, num):
+        self._numSideSets = num
+
+    # Number of nodesets
+    @property
+    def numNodeSets(self):
+        return self._numNodeSets
+
+    @numNodeSets.setter
+    def numNodeSets(self, num):
+        self._numNodeSets = num
