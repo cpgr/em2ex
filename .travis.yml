@@ -1,0 +1,6 @@
+language: python
+
+before_install:
+  - sudo add-apt-repository ppa:nschloe/seacas-nightly -y
+  - sudo apt-get update -q
+  - sudo apt-get install seacas-bin -y
