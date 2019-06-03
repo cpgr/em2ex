@@ -1,5 +1,7 @@
 # Python byte code
 *.py[cod]
+__pycache__/
+.pytest_cache/
 
 # Exodus files
 *.e
