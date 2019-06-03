@@ -2,7 +2,7 @@
 
 import numpy as np
 from exodus_model.ExodusModel import ExodusModel
-from reader_utils import *
+from readers.reader_utils import *
 
 def readBlock(f):
     '''Reads block of data and returns it as a list'''
@@ -97,15 +97,15 @@ def parseEclipse(f, args):
 
     # Check that required SPECGRID, COORD and ZCORN data has been supplied
     if not specgridlist:
-        print "No SPECGRID data found in ", f
+        print("No SPECGRID data found in ", f)
         exit()
 
     if not coordlist:
-        print "No COORD data found in ", f
+        print("No COORD data found in ", f)
         exit()
 
     if not zcornlist:
-        print "No ZCORN data found in ", f
+        print("No ZCORN data found in ", f)
         exit()
 
     # The number of elements in the x, y and z directions are specified in the
@@ -115,23 +115,23 @@ def parseEclipse(f, args):
     nz = int(specgridlist[2])
 
     # Check the number of COORD entries parsed is correct (6 points per entry)
-    if (nx+1)*(ny+1)*6 != len(coordlist):
-        print "The number of COORD entries read is not correct"
+    if (nx+1)*(ny+1)*6 != len(list(coordlist)):
+        print("The number of COORD entries read is not correct")
         exit()
 
     # Check the number of ZCORN entries parsed is correct
-    if (2 * nx)*(2 * ny) *(2 * nz) != len(zcornlist):
-        print "The number of ZCORN entries read is not correct"
+    if (2 * nx)*(2 * ny) *(2 * nz) != len(list(zcornlist)):
+        print("The number of ZCORN entries read is not correct")
         exit()
 
     # Check all of the elemental properties that have been parsed
     for prop in elemProps:
-        if len(elemProps[prop]) != nx*ny*nz:
-            print "The number of", prop, "entries read is not correct"
+        if elemProps[prop].size != nx*ny*nz:
+            print("The number of", prop, "entries read is not correct")
             exit()
 
     # Notify user that parsing has finished
-    print "Finished parsing Eclipse file"
+    print("Finished parsing Eclipse file")
 
     # Now the data can be reshaped and processed for easy use
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
