@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import re
 from exodus_model.ExodusModel import ExodusModel
-from reader_utils import *
+from readers.reader_utils import *
 
 def parseLeapfrog(f, args):
     '''Parse the Leapfrog file and return node coordinates and material properties'''
@@ -18,7 +18,7 @@ def parseLeapfrog(f, args):
     if match:
         block_size = [int(x) for x in match.group('size').split()]
     else:
-        print "Could not locate block size in {}".format(f)
+        print("Could not locate block size in {}".format(f))
     # Close the file after parsing
     fid.close()
 
@@ -72,9 +72,9 @@ def parseLeapfrog(f, args):
 
     # Notify user that parsing has finished
     print("Finished parsing Leapfrog file")
-    print "There were ", numprops - 7, " material properties found"
-    print "There were ",numvariables - 7, " nodal variable values found"
-    print "Mesh dimensions are nx: ",nx," ny: ", ny," nz: ", nz
+    print("There were ", numprops - 7, " material properties found")
+    print("There were ",numvariables - 7, " nodal variable values found")
+    print("Mesh dimensions are nx: ",nx," ny: ", ny," nz: ", nz)
 
 
     # Now build node location arrays. The x and y data are taken firectly from the pandas node table.

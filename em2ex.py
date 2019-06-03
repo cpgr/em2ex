@@ -47,7 +47,7 @@ def main():
         model = leapfrog.parseLeapfrog(filename, args)
 
     else:
-        print 'File extension ', file_extension, ' not supported'
+        print('File extension ', file_extension, ' not supported')
         exit()
 
     # After parsing the reservoir model, the Exodus file can be written
