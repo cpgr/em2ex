@@ -1,7 +1,7 @@
-3x3:
-  filename: test.grdecl
+simple_cube:
+  filename: simple_cube.grdecl
   type: exodiff
-  gold: test.e
+  gold: simple_cube.e
 
 missing_specgrid:
   filename: missing_specgrid.grdecl
