@@ -2,3 +2,33 @@
   filename: test.grdecl
   type: exodiff
   gold: test.e
+
+missing_specgrid:
+  filename: missing_specgrid.grdecl
+  type: exception
+  expected_error: No SPECGRID data found
+
+missing_coord:
+  filename: missing_coord.grdecl
+  type: exception
+  expected_error: No COORD data found
+
+missing_zcorn:
+  filename: missing_zcorn.grdecl
+  type: exception
+  expected_error: No ZCORN data found
+
+incorrect_coord:
+  filename: incorrect_coord.grdecl
+  type: exception
+  expected_error: The number of COORD entries read is not correct
+
+incorrect_zcorn:
+  filename: incorrect_zcorn.grdecl
+  type: exception
+  expected_error: The number of ZCORN entries read is not correct
+
+incorrect_property:
+  filename: incorrect_property.grdecl
+  type: exception
+  expected_error: The number of PORO entries read is not correct

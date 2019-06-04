@@ -10,7 +10,7 @@ class Em2exException(Exception):
     pass
 
 # Run the current file using pytest
-pytest.main(['-v', '-rsxE', '--tb=line', 'run_tests.py'])
+pytest.main(['-v', '-rsx', '--tb=line', 'run_tests.py'])
 
 # Find all 'tests' yml files that contain the test specifications
 tests_files = []
@@ -51,6 +51,17 @@ def test_em2ex(key):
         else:
             exodiff_test(key)
 
+    # If the test type is exception, run the expected_error test
+    if tests[key]['type'] == 'exception':
+        # If the expected_error key isn't specified, skip test
+        if 'expected_error' not in tests[key].keys():
+            pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as expected_error not specified')
+        else:
+            with pytest.raises(Exception) as excinfo:
+                expected_error(key)
+
+            assert tests[key]['expected_error'] in str(excinfo.value)
+
     return
 
 def exodiff_test(key):
@@ -72,5 +83,19 @@ def exodiff_test(key):
 
     except subprocess.CalledProcessError:
         raise Em2exException( filepath + '/' + key + ': exodiff failed - files are different')
+
+    return
+
+def expected_error(key):
+    ''' Raise an exception when an error is thrown while em2ex is running '''
+
+    # Convert reservoir model to Exodus II model
+    filepath = tests[key]['filepath']
+
+    filename = tests[key]['filename']
+    testfilename = os.path.join(filepath, filename)
+    output = subprocess.check_output(['./em2ex.py', '-f', testfilename])
+
+    raise Em2exException(output)
 
     return
