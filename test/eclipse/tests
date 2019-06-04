@@ -1,0 +1,4 @@
+3x3:
+  filename: test.grdecl
+  type: exodiff
+  gold: test.e
