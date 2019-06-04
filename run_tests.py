@@ -24,11 +24,15 @@ tests = {}
 for test in tests_files:
     with open(test, 'r') as file:
         testcfg = yaml.safe_load(file)
+
+        # Extract the filepath
+        filepath, filename = os.path.split(test)
+
         for key, values in testcfg.items():
-            tests[key] = values
-            # Also save the filepath to the dict
-            filename_path, filename = os.path.split(test)
-            tests[key]['filepath'] = filename_path
+            # Make keys unique by prepending the filepath
+            fullpathkey = os.path.join(filepath, key)
+            tests[fullpathkey] = values
+            tests[fullpathkey]['filepath'] = filepath
 
 # Run all em2ex tests found during search
 @pytest.mark.parametrize('key', tests)
@@ -37,17 +41,17 @@ def test_em2ex(key):
 
     # If the type key isn't specified, skip test
     if 'type' not in tests[key].keys():
-        pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as test type not specified')
+        pytest.skip(key + ': Skipped as test type not specified')
 
     # If the filename key isn't specified, skip test
     if 'filename' not in tests[key].keys():
-        pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as file not specified')
+        pytest.skip(key + ': Skipped as file not specified')
 
     # If the test type is exodiff, run exodiff_test
     if tests[key]['type'] == 'exodiff':
         # If the gold key isn't specified, skip test
         if 'gold' not in tests[key].keys():
-            pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as gold file not specified')
+            pytest.skip(key + ': Skipped as gold file not specified')
         else:
             exodiff_test(key)
 
@@ -55,7 +59,7 @@ def test_em2ex(key):
     elif tests[key]['type'] == 'exception':
         # If the expected_error key isn't specified, skip test
         if 'expected_error' not in tests[key].keys():
-            pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as expected_error not specified')
+            pytest.skip(key + ': Skipped as expected_error not specified')
         else:
             with pytest.raises(Exception) as excinfo:
                 expected_error(key)
@@ -64,7 +68,7 @@ def test_em2ex(key):
 
     else:
         # Skip unknown test type
-        pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as unknown test type')
+        pytest.skip(key + ': Skipped as unknown test type')
 
     return
 
