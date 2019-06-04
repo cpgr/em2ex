@@ -127,7 +127,7 @@ def parseEclipse(f, args):
     # Check all of the elemental properties that have been parsed
     for prop in elemProps:
         if elemProps[prop].size != nx*ny*nz:
-            print("The number of", prop, "entries read is not correct")
+            print("The number of " + prop + " entries read is not correct")
             exit()
 
     # Notify user that parsing has finished
