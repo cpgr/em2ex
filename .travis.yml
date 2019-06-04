@@ -15,7 +15,7 @@ before_install:
   - cd $TRAVIS_BUILD_DIR/..
   - git clone https://github.com/gsjaardema/seacas.git
   - cd seacas && export ACCESS=`pwd`
-  - GNU_PARALLEL=OFF CGNS=OFF MATIO=OFF ./install-tpl.sh
+  - GNU_PARALLEL=OFF CGNS=OFF MATIO=OFF ./install-tpl.sh &> install-tpl-output.txt
 
 install:
   # Seacas requires cmake > 3.10 (unfortunately have to compile from source)
