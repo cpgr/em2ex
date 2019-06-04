@@ -1,0 +1,9 @@
+test:
+  filename: test
+  type: exodiff
+  gold: test.e
+
+irr_test:
+  filename: irr_test
+  type: exodiff
+  gold: irr_test.e

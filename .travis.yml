@@ -38,6 +38,7 @@ install:
   # Install required python modules
   - pip install pandas
   - pip install pytest
+  - pip install pyYAML
 
 before_script:
   # Add exodus.py and exodiff to appropriate path
