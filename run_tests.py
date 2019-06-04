@@ -52,7 +52,7 @@ def test_em2ex(key):
             exodiff_test(key)
 
     # If the test type is exception, run the expected_error test
-    if tests[key]['type'] == 'exception':
+    elif tests[key]['type'] == 'exception':
         # If the expected_error key isn't specified, skip test
         if 'expected_error' not in tests[key].keys():
             pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as expected_error not specified')
@@ -61,6 +61,10 @@ def test_em2ex(key):
                 expected_error(key)
 
             assert tests[key]['expected_error'] in str(excinfo.value)
+
+    else:
+        # Skip unknown test type
+        pytest.skip(tests[key]['filepath'] + '/tests:' + key + ': Skipped as unknown test type')
 
     return
 
