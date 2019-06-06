@@ -133,7 +133,7 @@ def main():
 
         for blkid in block_ids:
             for var in model.elemVars:
-                exodusFile.put_element_variable_values(blkid, var.lower(), timestep, model.elemVars[var])
+                exodusFile.put_element_variable_values(blkid, var.lower(), timestep, model.elemVars[var][blocks==blkid])
 
         # Add elemental variables to sidesets as well if required
         if not args.omit_sidesets:
