@@ -170,8 +170,11 @@ def parseLeapfrog(f, args):
     model.numNodes = nodeIds.size
     model.numElems = elemIds.size
 
-    # Block IDs (assume only one block ID currently)
-    model.blockIds = np.zeros(elemIds.size).astype(int)
+    # Block IDs
+    if 'block' in model.elemVars:
+        model.blockIds = model.elemVars['block'].astype(int)
+    else:
+        model.blockIds = np.zeros(elemIds.size).astype(int)
 
     # Add sidesets if required
     if args.omit_sidesets:
