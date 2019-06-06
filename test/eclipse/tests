@@ -3,6 +3,11 @@ simple_cube:
   type: exodiff
   gold: simple_cube.e
 
+inactive_cells:
+  filename: inactive.grdecl
+  type: exodiff
+  gold: inactive.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception

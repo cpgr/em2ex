@@ -167,25 +167,22 @@ def parseLeapfrog(f, args):
     model.elemNodes = elemNodes
     model.elemVars = props
     model.nodeVars = variables
+    model.numNodes = nodeIds.size
+    model.numElems = elemIds.size
 
     # Block IDs (assume only one block ID currently)
     model.blockIds = np.zeros(elemIds.size).astype(int)
 
-    if not args.omit_sidesets:
-        # Sideset names
-        model.sideSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
+    # Add sidesets if required
+    if args.omit_sidesets:
+        model.numSideSets = 0
+    else:
+        addSideSets(model)
 
-        # Sidesets for the boundaries of the model (note: assumes 3D model)
-        model.sideSets = addSideSets(model.elemIds)
-
-        # Sideset side numbers (note: assumes 3D model)
-        model.sideSetSides = addSideSetSides(model.sideSets)
-
-    if not args.omit_nodesets:
-        # Nodesets
-        model.nodeSetNames = ['bottom', 'front', 'left', 'right', 'back', 'top']
-
-        # Nodesets for the boundaries of the model (note: assumes 3D model)
-        model.nodeSets = addNodeSets(model.nodeIds)
+    # Add nodesets if required
+    if args.omit_nodesets:
+        model.numNodeSets = 0
+    else:
+        addNodeSets(model)
 
     return model

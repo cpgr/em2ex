@@ -55,10 +55,10 @@ def main():
     numDim = model.dim
 
     # Number of nodes, elements, sidesets and nodesets
-    numNodes = model.nodeIds.size
-    numElems = model.elemIds.size
-    numNodeSets = len(model.nodeSets)
-    numSideSets = len(model.sideSets)
+    numNodes = model.numNodes
+    numElems = model.numElems
+    numNodeSets = model.numNodeSets
+    numSideSets = model.numSideSets
 
     # The number of blocks is equal to the unique numbers of block ids
     blocks = model.blockIds
@@ -94,9 +94,6 @@ def main():
 
     exodusFile.put_coord_names(coordNames)
     exodusFile.put_coords(model.xcoords, model.ycoords, model.zcoords)
-
-    exodusFile.put_node_id_map(np.arange(1, numNodes+1))
-    exodusFile.put_elem_id_map(np.arange(1, numElems+1))
 
     exodusFile.put_elem_blk_names(block_ids.astype(str))
 
