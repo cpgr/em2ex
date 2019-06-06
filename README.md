@@ -49,15 +49,16 @@ To convert a reservoir model to an Exodus II file, run
 which produces an Exodus II file `filenanem.e` with the cell-centred reservoir properties saved
 as elemental variables, and nodal properties saved as nodal variables.
 
-For example, the `test/eclipse` directory contains an ASCII Eclipse reservoir model (`.grdecl` file extension). This can be converted to an Exodus II file using
+For example, the `test/eclipse` directory contains several ASCII Eclipse reservoir model (`.grdecl` file extension). This can be converted to an Exodus II file using
 ```bash
-./em2ex.py test.grdecl
+./em2ex.py simple_cube.grdecl
 ```
 
 Similarly, the `test/leapfrog` directory contains a set of example Leapfrog reservoir model files that can be converted to Exodus II files using
 ```bash
 ./em2ex.py test
 ```
+for example.
 
 ## Commandline options
 
@@ -101,6 +102,39 @@ Second, the user will need to create a second block model in Leapfrog that is n+
 ```bash
 ./run_tests.py
 ```
+
+New tests can be added anywhere within the `test` directory. The test harness recurses through this directory and all subdirectories looking for all instances of a `tests` file. This YAML file contains the details of each test in that directory.
+
+The `tests` file syntax is basic YAML, and looks like:
+```yml
+simple_cube:
+  filename: simple_cube.grdecl
+  type: exodiff
+  gold: simple_cube.e
+```
+In this example, the test harness will run
+```bash
+em2ex -f simple_cube.grdecl
+```
+and then compare the resulting Exodus II file with the file `gold\simple_cube.e`
+```bash
+exodiff simple_cube.e gold\simple_cube.e
+```
+
+The test harness can also test for expected error messages. For example, the follwing block in a `tests` file
+```yml
+missing_specgrid:
+  filename: missing_specgrid.grdecl
+  type: exception
+  expected_error: No SPECGRID data found
+```
+will run
+```bash
+em2ex -f missing_specgrid.grdecl
+```
+and then check that the error message contains the string `No SPECGRID data found`.
+
+Each `tests` files can contain multiple individual tests. When pytest runs the test suite, the top-level label for each individual test in the `tests` file (for example, the labels `simple_cube` and `missing_specgrid` in the above examples) will be printed to the commandline, along with the status of each test run. 
 
 The test suite is run automatically on all pull requests to ensure that `em2ex` continues to work as expected.
 
