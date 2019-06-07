@@ -3,6 +3,11 @@ simple_cube:
   type: exodiff
   gold: simple_cube.e
 
+simple_cube_shorthand:
+  filename: simple_cube_shorthand.grdecl
+  type: exodiff
+  gold: simple_cube.e
+
 inactive_cells:
   filename: inactive.grdecl
   type: exodiff
