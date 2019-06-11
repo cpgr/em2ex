@@ -94,8 +94,9 @@ def parseLeapfrog(f, args):
     elemIds = np.zeros((nz, ny, nx), dtype=int)
     node_list = np.zeros((nz+1) * (ny+1) * (nx+1))
 
+    # Exodus node and element numbering starts at one
     nodenum = 1
-    elemnum = 0
+    elemnum = 1
     for k in xrange(0,nz):
         for j in xrange(0,ny):
             for i in xrange(0,nx):
@@ -112,19 +113,38 @@ def parseLeapfrog(f, args):
     for k in xrange(0,nz):
         for j in xrange(0,ny):
             for i in xrange(0,nx):
-                # Add the nodes for this element to the connectivity array
-                elemNodes[elemnum, 0] = nodeIds[k, j, i]
-                elemNodes[elemnum, 1] = nodeIds[k, j, i+1]
-                elemNodes[elemnum, 2] = nodeIds[k, j+1, i+1]
-                elemNodes[elemnum, 3] = nodeIds[k, j+1, i]
-                elemNodes[elemnum, 4] = nodeIds[k+1, j, i]
-                elemNodes[elemnum, 5] = nodeIds[k+1, j, i+1]
-                elemNodes[elemnum, 6] = nodeIds[k+1, j+1, i+1]
-                elemNodes[elemnum, 7] = nodeIds[k+1, j+1, i]
+                    # Add the nodes for this element to the connectivity array
+                    elemNodes[elemnum - 1, 0] = nodeIds[k, j, i]
+                    elemNodes[elemnum - 1, 1] = nodeIds[k, j, i+1]
+                    elemNodes[elemnum - 1, 2] = nodeIds[k, j+1, i+1]
+                    elemNodes[elemnum - 1, 3] = nodeIds[k, j+1, i]
+                    elemNodes[elemnum - 1, 4] = nodeIds[k+1, j, i]
+                    elemNodes[elemnum - 1, 5] = nodeIds[k+1, j, i+1]
+                    elemNodes[elemnum - 1, 6] = nodeIds[k+1, j+1, i+1]
+                    elemNodes[elemnum - 1, 7] = nodeIds[k+1, j+1, i]
 
-                # Also the array of element ids
-                elemIds[k,j,i] = elemnum + 1
-                elemnum+=1
+                    elemnum+=1
+
+    # Also require the element ids for setting the sidesets. Note that the internal
+    # exodus element numbering is for each block in turn (ie. all elements in block 1
+    # are numbered consecutively, then all elements in the next block, etc.)
+
+    # Block IDs (needed to provide correct element numbering)
+    if 'block' in props:
+        blocks = props['block'].astype(int).reshape((nz, ny, nx))
+    else:
+        blocks = np.zeros(elemIds.shape).astype(int)
+
+    # Reset the elemnum counter
+    elemnum = 1
+    for blkid in np.unique(blocks):
+        for k in xrange(0,nz):
+            for j in xrange(0,ny):
+                for i in xrange(0,nx):
+                    if blocks[k, j, i] == blkid:
+                        elemIds[k,j,i] = elemnum
+                        elemnum+=1
+
 
     # Order the coordinates according to the node numbering
     xcoords = np.zeros(((nx +1) * (ny+1) * (nz+1)))
@@ -138,11 +158,12 @@ def parseLeapfrog(f, args):
                 # Get the node number corresponding to i,j,k
                 # Note that the array position is node_id - 1
                 nid = nodeIds[k,j,i]
-                xcoords[nid-1] = xdata[k,j,i]
-                ycoords[nid-1] = ydata[k,j,i]
-                zcoords[nid-1] = zdata[k,j,i]
-                node_list[n] = nid
-                n += 1
+                if nid != 0:
+                    xcoords[nid-1] = xdata[k,j,i]
+                    ycoords[nid-1] = ydata[k,j,i]
+                    zcoords[nid-1] = zdata[k,j,i]
+                    node_list[n] = nid
+                    n += 1
 
     node_order = np.asarray(node_list)
     pressure = np.asarray(node_file['pressure'])  # can add .tolist() to mke these lists
@@ -169,12 +190,7 @@ def parseLeapfrog(f, args):
     model.nodeVars = variables
     model.numNodes = nodeIds.size
     model.numElems = elemIds.size
-
-    # Block IDs
-    if 'block' in model.elemVars:
-        model.blockIds = model.elemVars['block'].astype(int)
-    else:
-        model.blockIds = np.zeros(elemIds.size).astype(int)
+    model.blockIds = blocks.flatten()
 
     # Add sidesets if required
     if args.omit_sidesets:
