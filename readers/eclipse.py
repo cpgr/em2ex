@@ -203,9 +203,32 @@ def parseEclipse(f, args):
                     elemNodes[elemnum - 1, 6] = nodeIds[k+1, j+1, i+1]
                     elemNodes[elemnum - 1, 7] = nodeIds[k+1, j+1, i]
 
-                    # Also the array of element ids
-                    elemIds[k,j,i] = elemnum
                     elemnum+=1
+
+    # Also require the element ids for setting the sidesets. Note that the internal
+    # exodus element numbering is for each block in turn (ie. all elements in block 1
+    # are numbered consecutively, then all elements in the next block, etc.)
+
+    # Block IDs (needed to provide correct element numbering)
+    if 'SATNUM' in elemProps:
+        blocks = elemProps['SATNUM'].astype(int).reshape((nz, ny, nx))
+    else:
+        blocks = np.zeros(elemIds.shape).astype(int)
+
+    # Reset the elemnum counter
+    elemnum = 1
+    for blkid in np.unique(blocks):
+        for k in xrange(0,nz):
+            for j in xrange(0,ny):
+                for i in xrange(0,nx):
+                    # Only consider active elements
+                    if active_elements[k, j, i]:
+                        if blocks[k, j, i] == blkid:
+                            elemIds[k,j,i] = elemnum
+                            elemnum+=1
+
+    print elemIds
+    print blocks
 
     # Order the coordinates according to the node numbering
     xcoords = np.zeros(num_active_nodes)
@@ -238,12 +261,7 @@ def parseEclipse(f, args):
     model.elemVars = elemProps
     model.numElems = num_active_elements
     model.numNodes = num_active_nodes
-
-    # Block ids for the mesh
-    if 'SATNUM' in model.elemVars:
-        model.blockIds = model.elemVars['SATNUM'].astype(int)
-    else:
-        model.blockIds = np.zeros(num_active_elements).astype(int)
+    model.blockIds = blocks.flatten()[active_elements.flatten()>0]
 
     # Add sidesets if required
     if args.omit_sidesets:
