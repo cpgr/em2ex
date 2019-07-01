@@ -227,9 +227,6 @@ def parseEclipse(f, args):
                             elemIds[k,j,i] = elemnum
                             elemnum+=1
 
-    print elemIds
-    print blocks
-
     # Order the coordinates according to the node numbering
     xcoords = np.zeros(num_active_nodes)
     ycoords = np.zeros(num_active_nodes)
