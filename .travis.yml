@@ -5,7 +5,7 @@ python:
 
 addons:
   apt:
-    packages: ['gfortran']
+    packages: ['gfortran', 'python2.7']
 
 env:
   global:
@@ -45,4 +45,4 @@ before_script:
   - export PYTHONPATH=$PYTHONPATH:$ACCESS/lib
   - export PATH=$PATH:$ACCESS/bin
 
-script: python run_tests.py
+script: pytest run_tests.py
