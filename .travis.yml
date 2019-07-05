@@ -1,48 +1,18 @@
 language: python
 python:
-  # exodus.py only works with python 2 currently
   - "2.7"
-
-addons:
-  apt:
-    packages: ['gfortran']
-
-env:
-  global:
-    - MAKEFLAGES="-j 2"
+  - "3.6"
 
 before_install:
   - cd $TRAVIS_BUILD_DIR/..
-  - git clone https://github.com/gsjaardema/seacas.git
-  - cd seacas && export ACCESS=`pwd`
-  - GNU_PARALLEL=OFF CGNS=OFF MATIO=OFF ./install-tpl.sh &> install-tpl-output.txt
+  - git clone https://github.com/cpgr/pyexodiff.git
+  - cd $TRAVIS_BUILD_DIR
 
 install:
-  # Seacas requires cmake > 3.10 (unfortunately have to compile from source)
-  - DEPS_DIR="${HOME}/deps"
-  - mkdir -p ${DEPS_DIR} && cd ${DEPS_DIR}
-  - |
-    if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
-      CMAKE_URL="https://cmake.org/files/v3.10/cmake-3.10.0-Linux-x86_64.tar.gz"
-      mkdir cmake && travis_retry wget --no-check-certificate --quiet -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C cmake
-      export PATH=${DEPS_DIR}/cmake/bin:${PATH}
-    else
-      brew install cmake || brew upgrade cmake
-    fi
-  - cmake --version
-  - export FC=gfortran
-  # Build seacas (to get exodiff and exodus.py)
-  - cd $ACCESS && ./cmake-config
-  - cd build && make && make install
-  - cd $TRAVIS_BUILD_DIR
   # Install required python modules
   - pip install pandas
   - pip install pytest
   - pip install pyYAML
+  - pip install netCDF4
 
-before_script:
-  # Add exodus.py and exodiff to appropriate path
-  - export PYTHONPATH=$PYTHONPATH:$ACCESS/lib
-  - export PATH=$PATH:$ACCESS/bin
-
-script: python run_tests.py
+script: python -m pytest -v --exodiff ../pyexodiff/pyexodiff.py run_tests.py

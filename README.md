@@ -2,41 +2,59 @@
 
 [![Build Status](https://travis-ci.com/cpgr/em2ex.svg?branch=master)](https://travis-ci.com/cpgr/em2ex)
 
-`em2ex` converts a reservoir model to an Exodus II file that can then be used in
-a simulation tool (such as [MOOSE](http://www.mooseframework.org)). Currently, `em2ex`
-supports two reservoir modelling packages:
+`em2ex` is a python program that converts a reservoir model to an Exodus II file that can then be used in
+a simulation tool (such as [MOOSE](http://www.mooseframework.org)) or viewed in a visualisation tool (such as [Paraview](https://www.paraview.org)).
 
-- Eclipse
-- Leapfrog Geothermal
+Currently, `em2ex` supports two reservoir modelling formats:
 
-`em2ex` is a python program designed using python 2.7. Current versions of the Exodus II python API that `em2ex` uses **do not work with python 3**, so all users should use python 2.7 at this current time.
+- Eclipse (ASCII files)
+- Leapfrog Geothermal (CSV files)
 
 ## Setup
 
-`em2ex` requires the `exodus` package (including the python API) to be installed. This can be done by installing the [`seacas`](https://github.com/gsjaardema/seacas) package.
+`em2ex` is a pure python program that does not depend on any external libraries (but does require a few common python packages), so can run on any system with a working python installation.
+
+### Clone repository
+
+`em2ex` can be installed by cloning this repository from GitHub using
+```bash
+git clone git@github.com:cpgr/em2ex.git
+```
+or
+```bash
+git clone https://github.com/cpgr/em2ex.git
+```
+This will add a folder `em2ex` containing the code.
+
+### Required python packages
+
+The following python packages are required to run `em2ex`
+
+- numpy
+- pandas
+- netCDF4
+
+The first two are typically already installed, but if not, can be installed using `pip`. The `netCDF4` package can be installed using `pip` as well:
+```bash
+pip install netdf4
+```
+
+Two additional python package, `pytest` and `pyYAML` are required to run the test script. Again, these can be installed using `pip`
+```bash
+pip install pytest
+```
+
+### Optional Exodus API
+
+`em2ex` can optionally use the `Exodus II` API instead of the simplified `pyexodus` API included in the code, which is available through the [`SEACAS`](https://github.com/gsjaardema/seacas) package.
 
 For [MOOSE](http://www.mooseframework.org) users, this package is installed as part of
-the environment. To use the python API available in this way, the path to the python API in the seacas package (`/opt/moose/seacas/lib`) should be added to the `PYTHONPATH` environment variable
+the default environment. To use the Exodus python API, the path to the python API in the SEACAS package (`/opt/moose/seacas/lib`) should be added to the `PYTHONPATH` environment variable
 ```bash
 export PYTHONPATH=$PYTHONPATH:/opt/moose/seacas/lib
 ```
 
-For non-MOOSE users, the location of `exodus.py` must be added to `PYTHONPATH`.
-
-The following python packages are also required to run `em2ex`
-
-- numpy
-- pandas
-
-These are typically already installed, but if not, can be installed using `pip`
-```bash
-pip install numpy
-```
-
-An additional python package, `pytest`, is required to run the test script. Again, this can be installed using
-```bash
-pip install pytest
-```
+For non-MOOSE users, 'SEACAS' can be installed manually and the location of `exodus.py` added to `PYTHONPATH`.
 
 ## Usage
 
@@ -49,7 +67,7 @@ To convert a reservoir model to an Exodus II file, run
 which produces an Exodus II file `filenanem.e` with the cell-centred reservoir properties saved
 as elemental variables, and nodal properties saved as nodal variables.
 
-For example, the `test/eclipse` directory contains several ASCII Eclipse reservoir model (`.grdecl` file extension). This can be converted to an Exodus II file using
+For example, the `test/eclipse` directory contains several ASCII Eclipse reservoir model (`.grdecl` file extension). These can be converted to an Exodus II file using
 ```bash
 ./em2ex.py simple_cube.grdecl
 ```
@@ -98,9 +116,16 @@ Second, the user will need to create a second block model in Leapfrog that is n+
 
 ## Test suite
 
-`em2ex` includes a python script `run_tests.py` which uses the [pytest](https://pytest.org) framework to run the included tests. The test suite can be run using
+`em2ex` includes a python script `run_tests.py` which uses the [pytest](https://pytest.org) framework to run the included tests.
+
+**Note:** The test suite generates and Exodus file from each reservoir model, and compares it with an existing Exodus file (the gold file). To compare these files, the test harness uses the `exodiff` utility (part of the [`SEACAS`](https://github.com/gsjaardema/seacas) package) to compare Exodus files. If this package is already installed (for example, as part of [MOOSE](http://www.mooseframework.org) or to utilise the Exodus API), then the test suite can be run using
 ```bash
 ./run_tests.py
+```
+
+Alternatively, to avoid installing the entire [`SEACAS`](https://github.com/gsjaardema/seacas) package) just to run the test suite, the python [`pyexodiff`](https://github.com/cpgr/pyexodiff) package can be installed, and used in the test suite using
+```bash
+python -m pytest -v --exodiff=pyexodiff.py ./run_tests.py
 ```
 
 New tests can be added anywhere within the `test` directory. The test harness recurses through this directory and all subdirectories looking for all instances of a `tests` file. This YAML file contains the details of each test in that directory.
@@ -134,9 +159,9 @@ em2ex -f missing_specgrid.grdecl
 ```
 and then check that the error message contains the string `No SPECGRID data found`.
 
-Each `tests` files can contain multiple individual tests. When pytest runs the test suite, the top-level label for each individual test in the `tests` file (for example, the labels `simple_cube` and `missing_specgrid` in the above examples) will be printed to the commandline, along with the status of each test run. 
+Each `tests` files can contain multiple individual tests. When pytest runs the test suite, the top-level label for each individual test in the `tests` file (for example, the labels `simple_cube` and `missing_specgrid` in the above examples) will be printed to the commandline, along with the status of each test run.
 
-The test suite is run automatically on all pull requests to ensure that `em2ex` continues to work as expected.
+The test suite is run automatically on all pull requests to ensure that `em2ex` continues to work as expected. To reduce the time for automated testing, these tests are run using the provided `pyexodus` API, as well as [`pyexodiff`](https://github.com/cpgr/pyexodiff) to compare the results.
 
 ## Contributors
 

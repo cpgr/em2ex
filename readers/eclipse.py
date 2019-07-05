@@ -17,7 +17,7 @@ def readBlock(f):
         # End read if line ends with /
         if block[-1] == '/':
             block.pop()
-            block = map(float, block)
+            block = list(map(float, block))
             break
     return block
 
@@ -170,9 +170,9 @@ def parseEclipse(f, args):
     # Exodus node and element numbering starts at one
     nodenum = 1
     elemnum = 1
-    for k in xrange(0, nz):
-        for j in xrange(0, ny):
-            for i in xrange(0, nx):
+    for k in range(0, nz):
+        for j in range(0, ny):
+            for i in range(0, nx):
                 # Only label nodes for active elements
                 if active_elements[k, j, i]:
                     # Label all the nodes for this element
@@ -188,9 +188,9 @@ def parseEclipse(f, args):
     # The number of active nodes is
     num_active_nodes = np.count_nonzero(nodeIds)
 
-    for k in xrange(0, nz):
-        for j in xrange(0, ny):
-            for i in xrange(0, nx):
+    for k in range(0, nz):
+        for j in range(0, ny):
+            for i in range(0, nx):
                 # Only consider active elements
                 if active_elements[k, j, i]:
                     # Add the nodes for this element to the connectivity array
@@ -218,9 +218,9 @@ def parseEclipse(f, args):
     # Reset the elemnum counter
     elemnum = 1
     for blkid in np.unique(blocks):
-        for k in xrange(0,nz):
-            for j in xrange(0,ny):
-                for i in xrange(0,nx):
+        for k in range(0,nz):
+            for j in range(0,ny):
+                for i in range(0,nx):
                     # Only consider active elements
                     if active_elements[k, j, i]:
                         if blocks[k, j, i] == blkid:
@@ -232,9 +232,9 @@ def parseEclipse(f, args):
     ycoords = np.zeros(num_active_nodes)
     zcoords = np.zeros(num_active_nodes)
 
-    for k in xrange(0, nz+1):
-        for j in xrange(0, ny+1):
-            for i in xrange(0, nx+1):
+    for k in range(0, nz+1):
+        for j in range(0, ny+1):
+            for i in range(0, nx+1):
                 # Get the node number corresponding to i,j,k
                 # Note that the array position is node_id - 1
                 nid = nodeIds[k,j,i]

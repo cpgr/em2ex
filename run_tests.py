@@ -36,7 +36,7 @@ for test in tests_files:
 
 # Run all em2ex tests found during search
 @pytest.mark.parametrize('key', tests)
-def test_em2ex(key):
+def test_em2ex(key, use_official_api, exodiff):
     ''' Run all em2ex tests using appropriate test function '''
 
     # If the type key isn't specified, skip test
@@ -53,7 +53,7 @@ def test_em2ex(key):
         if 'gold' not in tests[key].keys():
             pytest.skip(key + ': Skipped as gold file not specified')
         else:
-            exodiff_test(key)
+            exodiff_test(key, use_official_api, exodiff)
 
     # If the test type is exception, run the expected_error test
     elif tests[key]['type'] == 'exception':
@@ -72,7 +72,7 @@ def test_em2ex(key):
 
     return
 
-def exodiff_test(key):
+def exodiff_test(key, use_official_api, exodiff):
     ''' Convert reservoir model to exodus and compare with gold file '''
 
     # Convert reservoir model to Exodus II model
@@ -80,14 +80,18 @@ def exodiff_test(key):
 
     filename = tests[key]['filename']
     testfilename = os.path.join(filepath, filename)
-    subprocess.check_output(['./em2ex.py', '-f', testfilename])
+
+    if use_official_api:
+        subprocess.check_output(['./em2ex.py', '-f', '--use-official-api', testfilename])
+    else:
+        subprocess.check_output(['./em2ex.py', '-f', testfilename])
 
     # Compare the converted model with a gold file using exodiff
     try:
         filename_base, file_extension = os.path.splitext(filename)
         exodus_filename = os.path.join(filepath, filename_base + '.e')
         gold_filename = os.path.join(filepath, 'gold', tests[key]['gold'])
-        subprocess.check_output(['exodiff', '-quiet', exodus_filename, gold_filename])
+        subprocess.check_output([exodiff, '--quiet', exodus_filename, gold_filename])
 
     except subprocess.CalledProcessError:
         raise Em2exException(key + ': exodiff failed - files are different')

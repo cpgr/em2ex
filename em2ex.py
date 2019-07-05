@@ -4,7 +4,6 @@
 
 import numpy as np
 from readers import eclipse, leapfrog
-from exodus import exodus
 from exodus_model import ExodusModel
 import argparse
 import os
@@ -19,6 +18,7 @@ def get_parser():
     parser.add_argument('--no-nodesets', dest = 'omit_nodesets', action = 'store_true', help = 'Disable addition of nodesets')
     parser.add_argument('--no-sidesets', dest = 'omit_sidesets', action = 'store_true', help = 'Disable addition of sidesets')
     parser.add_argument('-f', '--force', dest = 'force_overwrite', action = 'store_true', help = 'Overwrite filename.e if it exists')
+    parser.add_argument('-u', '--use-official-api', dest = 'use_official_api', action = 'store_true', help = 'Use exodus.py to write files')
     return parser
 
 def main():
@@ -27,6 +27,13 @@ def main():
     # Parse commandline options
     parser = get_parser()
     args = parser.parse_args()
+
+    # If --use-official-api is passed, then import exodus from exodus.py. Note:
+    # this requires that exodus.py is in the $PYTHONPATH environment variable
+    if args.use_official_api:
+        from exodus import exodus
+    else:
+        from pyexodus.pyexodus import exodus
 
     # Extract file name and extension
     filename = args.filename
@@ -74,7 +81,7 @@ def main():
     # If force_overwrite, then clobber any exisiting filename_base.e file
     output_file = filename_base + '.e'
 
-    if args.force_overwrite:
+    if args.force_overwrite and os.path.exists(output_file):
         try:
             os.remove(output_file)
         except:
@@ -177,6 +184,8 @@ def main():
 
     # Finally, close the exodus file
     exodusFile.close()
+
+    print('Exodus file written to {}'.format(output_file))
 
 if __name__ == '__main__':
     main()

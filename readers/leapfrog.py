@@ -97,9 +97,9 @@ def parseLeapfrog(f, args):
     # Exodus node and element numbering starts at one
     nodenum = 1
     elemnum = 1
-    for k in xrange(0,nz):
-        for j in xrange(0,ny):
-            for i in xrange(0,nx):
+    for k in range(0,nz):
+        for j in range(0,ny):
+            for i in range(0,nx):
                 # Label all the nodes for this element
                 nodenum = addNode(nodeIds, i, j, k, nodenum)
                 nodenum = addNode(nodeIds, i+1, j, k, nodenum)
@@ -110,9 +110,9 @@ def parseLeapfrog(f, args):
                 nodenum = addNode(nodeIds, i+1, j+1, k+1, nodenum)
                 nodenum = addNode(nodeIds, i, j+1, k+1, nodenum)
 
-    for k in xrange(0,nz):
-        for j in xrange(0,ny):
-            for i in xrange(0,nx):
+    for k in range(0,nz):
+        for j in range(0,ny):
+            for i in range(0,nx):
                     # Add the nodes for this element to the connectivity array
                     elemNodes[elemnum - 1, 0] = nodeIds[k, j, i]
                     elemNodes[elemnum - 1, 1] = nodeIds[k, j, i+1]
@@ -138,9 +138,9 @@ def parseLeapfrog(f, args):
     # Reset the elemnum counter
     elemnum = 1
     for blkid in np.unique(blocks):
-        for k in xrange(0,nz):
-            for j in xrange(0,ny):
-                for i in xrange(0,nx):
+        for k in range(0,nz):
+            for j in range(0,ny):
+                for i in range(0,nx):
                     if blocks[k, j, i] == blkid:
                         elemIds[k,j,i] = elemnum
                         elemnum+=1
