@@ -15,4 +15,4 @@ install:
   - pip install pyYAML
   - pip install netCDF4
 
-script: python -m pytest --exodiff ../pyexodiff/pyexodiff.py run_tests.py
+script: python -m pytest -v --exodiff ../pyexodiff/pyexodiff.py run_tests.py
