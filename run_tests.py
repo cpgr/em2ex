@@ -82,7 +82,7 @@ def exodiff_test(key, use_official_api, exodiff):
     testfilename = os.path.join(filepath, filename)
 
     if use_official_api:
-        subprocess.check_output(['./em2ex.py', '-f', ' --use-official-api', testfilename])
+        subprocess.check_output(['./em2ex.py', '-f', '--use-official-api', testfilename])
     else:
         subprocess.check_output(['./em2ex.py', '-f', testfilename])
 
