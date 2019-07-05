@@ -20,7 +20,7 @@ class exodus(object):
         assert numDims in [1, 2, 3], 'numDims must be 1, 2 or 3'
 
         # Open the netCDF4 file for reading/writing
-        self._rootgrp = Dataset(file, mode)
+        self._rootgrp = Dataset(file, mode, format = 'NETCDF3_64BIT_DATA')
 
         if mode == 'w':
             # Write global attributes
