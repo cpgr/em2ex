@@ -80,16 +80,45 @@ for example.
 
 ## Commandline options
 
+A number of optional commandline options are available, and can be seen by passing the `--help` flag:
+```bash
+$ ./em2ex.py --help
+
+usage: em2ex.py [-h] [--filetype {eclipse,leapfrog}] [--no-nodesets]
+                [--no-sidesets] [-f] [-u]
+                filename
+
+Converts earth model to Exodus II format
+
+positional arguments:
+  filename
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --filetype {eclipse,leapfrog}
+                        Explicitly state the filetype for unknown extensions
+  --no-nodesets         Disable addition of nodesets
+  --no-sidesets         Disable addition of sidesets
+  -f, --force           Overwrite filename.e if it exists
+  -u, --use-official-api
+                        Use exodus.py to write files
+```
+
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.
 
 For example, if the reservoir model is named `model.dat` but is actually an Eclipse ASCII
 file, then `em2ex` can still be used in the following manner
 ```bash
-./em2ex --filetype eclipse model.dat
+./em2ex.py --filetype eclipse model.dat
 ```
 
 to produce an Exodus II model `test.e`.
+
+If the [`SEACAS`](https://github.com/gsjaardema/seacas) package is installed, then the python API from that package can be used instead of the provided `pyexodus` API using
+```bash
+./em2ex.py --use-official-api test.grdecl
+```
 
 ## Supported formats
 
@@ -125,7 +154,7 @@ Second, the user will need to create a second block model in Leapfrog that is n+
 
 Alternatively, to avoid installing the entire [`SEACAS`](https://github.com/gsjaardema/seacas) package) just to run the test suite, the python [`pyexodiff`](https://github.com/cpgr/pyexodiff) package can be installed, and used in the test suite using
 ```bash
-python -m pytest -v --exodiff=pyexodiff.py ./run_tests.py
+python -m pytest -v --exodiff=pyexodiff.py run_tests.py
 ```
 
 New tests can be added anywhere within the `test` directory. The test harness recurses through this directory and all subdirectories looking for all instances of a `tests` file. This YAML file contains the details of each test in that directory.
@@ -139,7 +168,7 @@ simple_cube:
 ```
 In this example, the test harness will run
 ```bash
-em2ex -f simple_cube.grdecl
+em2ex.py -f simple_cube.grdecl
 ```
 and then compare the resulting Exodus II file with the file `gold\simple_cube.e`
 ```bash
@@ -155,7 +184,7 @@ missing_specgrid:
 ```
 will run
 ```bash
-em2ex -f missing_specgrid.grdecl
+em2ex.py -f missing_specgrid.grdecl
 ```
 and then check that the error message contains the string `No SPECGRID data found`.
 
