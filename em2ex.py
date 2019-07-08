@@ -47,7 +47,7 @@ def main():
         file_extension = ''
 
     # Parse the reservoir model using the appropriate reader
-    if file_extension == ".grdecl":
+    if file_extension.lower() == ".grdecl":
         model = eclipse.parseEclipse(filename, args)
 
     elif file_extension == '':
