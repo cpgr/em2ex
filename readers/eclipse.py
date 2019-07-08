@@ -9,8 +9,8 @@ def readBlock(f):
     block = []
     while True:
         line = next(f)
-        # Skip comments
-        if line.startswith('--'):
+        # Skip comments and blank lines
+        if line.startswith('--') or not line.strip():
             continue
         data = processData(line)
         block.extend(data)
