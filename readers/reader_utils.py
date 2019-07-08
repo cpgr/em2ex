@@ -111,4 +111,6 @@ def nonZeroValues(arr):
                 if arr[:, i, j][arr[:, i, j]>0].size > 0:
                     values.append(arr[:, i, j][arr[:, i, j]>0][0])
 
-    return sorted(values)
+    # Sort and make sure the values are unique
+    values = np.array(values, dtype = int)
+    return np.unique(values)
