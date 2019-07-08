@@ -13,6 +13,11 @@ inactive_cells:
   type: exodiff
   gold: inactive.e
 
+faulted:
+  filename: faulted.grdecl
+  type: exodiff
+  gold: faulted.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception

@@ -9,8 +9,8 @@ def readBlock(f):
     block = []
     while True:
         line = next(f)
-        # Skip comments
-        if line.startswith('--'):
+        # Skip comments and blank lines
+        if line.startswith('--') or not line.strip():
             continue
         data = processData(line)
         block.extend(data)
@@ -135,7 +135,11 @@ def parseEclipse(f, args):
 
     # Now the data can be reshaped and processed for easy use
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
-    coord = np.asarray(coordlist).reshape(ny+1, nx+1,6)
+    coord = np.asarray(coordlist).reshape(ny+1, nx+1, 6)
+
+    # Transform coord data to zcorn format (so that there is an x and y coordinate
+    # for each node in the grid)
+    xcorn, ycorn = coordToCorn(coord, nz)
 
     # The ZCORN data varies by x, y and then z. Reshape it into an array where
     # the first index gives the layer, the second the y coordinates and the third
@@ -144,66 +148,43 @@ def parseEclipse(f, args):
     # Also make sure that zcorn is in increasing z order
     zcorn.sort(axis=0)
 
-    # The x and y data are taken from the COORD data. These are repeated nz+1 times.
-    # The z data is taken from the ZCORN data, noting that it is repeated for each
-    # internal corner.
-    xdata = np.asarray([coord[:,:,0]] * (nz+1))
-    ydata = np.asarray([coord[:,:,1]] * (nz+1))
-    zdata = np.pad(zcorn, ((0,1), (0,1), (0,1)),'edge')[::2,::2,::2]
+    # Now transform all of the coordinate arrays into element-ordered array, where
+    # each row corresponds to a single element containing eight corners
+    elemcornx = elemCornerCoords(xcorn)
+    elemcorny = elemCornerCoords(ycorn)
+    elemcornz = elemCornerCoords(zcorn)
 
     # Some elements may be inactive (ACTNUM = 0), so don't count them
     if 'ACTNUM' in elemProps:
-        active_elements = elemProps['ACTNUM'].reshape(nz, ny, nx)
+        active_elements = elemProps['ACTNUM'].reshape(nz, ny, nx).astype(int)
     else:
         # All elements are active
-        active_elements = np.ones((nz, ny, nx))
+        active_elements = np.ones((nz, ny, nx), dtype = int)
 
     # The number of active elements is
     num_active_elements = np.count_nonzero(active_elements)
 
-    # Loop through the active elements and add the node numbers following the
-    # right-hand rule, starting at 1. Also construct the element connectivity array
-    nodeIds = np.zeros((nz+1, ny+1, nx+1), dtype=int)
-    elemNodes = np.zeros((num_active_elements, 8), dtype=int)
-    elemIds = np.zeros((nz, ny, nx), dtype=int)
+    # Generate the connection data by numbering all unique nodes in the mesh
+    elemNodes = numberNodesInElems(elemcornz, active_elements)
 
-    # Exodus node and element numbering starts at one
-    nodenum = 1
-    elemnum = 1
+    # Construct the nodeIds for all corners in all elements
+    nodeIds = np.zeros((2*nz, 2*ny,2*nx))
+
     for k in range(0, nz):
         for j in range(0, ny):
             for i in range(0, nx):
-                # Only label nodes for active elements
                 if active_elements[k, j, i]:
-                    # Label all the nodes for this element
-                    nodenum = addNode(nodeIds, i, j, k, nodenum)
-                    nodenum = addNode(nodeIds, i+1, j, k, nodenum)
-                    nodenum = addNode(nodeIds, i+1, j+1, k, nodenum)
-                    nodenum = addNode(nodeIds, i, j+1, k, nodenum)
-                    nodenum = addNode(nodeIds, i, j, k+1, nodenum)
-                    nodenum = addNode(nodeIds, i+1, j, k+1, nodenum)
-                    nodenum = addNode(nodeIds, i+1, j+1, k+1, nodenum)
-                    nodenum = addNode(nodeIds, i, j+1, k+1, nodenum)
+                    nodeIds[2*k, 2*j, 2*i] = elemNodes[k, j, i, 0]
+                    nodeIds[2*k, 2*j, 2*i + 1] = elemNodes[k, j, i, 1]
+                    nodeIds[2*k, 2*j + 1, 2*i] = elemNodes[k, j, i, 3]
+                    nodeIds[2*k, 2*j + 1, 2*i + 1] = elemNodes[k, j, i, 2]
+                    nodeIds[2*k + 1, 2*j, 2*i] = elemNodes[k, j, i, 4]
+                    nodeIds[2*k + 1, 2*j, 2*i + 1] = elemNodes[k, j, i, 5]
+                    nodeIds[2*k + 1, 2*j + 1, 2*i] = elemNodes[k, j, i, 7]
+                    nodeIds[2*k + 1, 2*j + 1, 2*i + 1] = elemNodes[k, j, i, 6]
 
     # The number of active nodes is
-    num_active_nodes = np.count_nonzero(nodeIds)
-
-    for k in range(0, nz):
-        for j in range(0, ny):
-            for i in range(0, nx):
-                # Only consider active elements
-                if active_elements[k, j, i]:
-                    # Add the nodes for this element to the connectivity array
-                    elemNodes[elemnum - 1, 0] = nodeIds[k, j, i]
-                    elemNodes[elemnum - 1, 1] = nodeIds[k, j, i+1]
-                    elemNodes[elemnum - 1, 2] = nodeIds[k, j+1, i+1]
-                    elemNodes[elemnum - 1, 3] = nodeIds[k, j+1, i]
-                    elemNodes[elemnum - 1, 4] = nodeIds[k+1, j, i]
-                    elemNodes[elemnum - 1, 5] = nodeIds[k+1, j, i+1]
-                    elemNodes[elemnum - 1, 6] = nodeIds[k+1, j+1, i+1]
-                    elemNodes[elemnum - 1, 7] = nodeIds[k+1, j+1, i]
-
-                    elemnum+=1
+    num_active_nodes = np.max(nodeIds).astype(int)
 
     # Also require the element ids for setting the sidesets. Note that the internal
     # exodus element numbering is for each block in turn (ie. all elements in block 1
@@ -213,9 +194,10 @@ def parseEclipse(f, args):
     if 'SATNUM' in elemProps:
         blocks = elemProps['SATNUM'].astype(int).reshape((nz, ny, nx))
     else:
-        blocks = np.zeros(elemIds.shape).astype(int)
+        blocks = np.zeros((nz, ny, nx), dtype=int)
 
-    # Reset the elemnum counter
+    # Give each element an ID (from 1 to num_active_elements)
+    elemIds = np.zeros((nz, ny, nx), dtype=int)
     elemnum = 1
     for blkid in np.unique(blocks):
         for k in range(0,nz):
@@ -228,20 +210,14 @@ def parseEclipse(f, args):
                             elemnum+=1
 
     # Order the coordinates according to the node numbering
-    xcoords = np.zeros(num_active_nodes)
-    ycoords = np.zeros(num_active_nodes)
-    zcoords = np.zeros(num_active_nodes)
+    elemNodes = elemNodes.reshape(nz*ny*nx, 8)
 
-    for k in range(0, nz+1):
-        for j in range(0, ny+1):
-            for i in range(0, nx+1):
-                # Get the node number corresponding to i,j,k
-                # Note that the array position is node_id - 1
-                nid = nodeIds[k,j,i]
-                if nid != 0:
-                    xcoords[nid-1] = xdata[k,j,i]
-                    ycoords[nid-1] = ydata[k,j,i]
-                    zcoords[nid-1] = zdata[k,j,i]
+    xcoords = elemCornToCoord(elemcornx, elemNodes)
+    ycoords = elemCornToCoord(elemcorny, elemNodes)
+    zcoords = elemCornToCoord(elemcornz, elemNodes)
+
+    # Remove any zeros (nodes start at 1)
+    elemNodes = elemNodes[~np.any(elemNodes == 0, axis=1)]
 
     # Remove elemental properties in inactive elements
     for prop in elemProps:
@@ -273,3 +249,166 @@ def parseEclipse(f, args):
         addNodeSets(model)
 
     return model
+
+def elemCornerCoords(corner_coords):
+    ''' Returns coordinates for all eight corner of each element '''
+
+    # Each corner_coords array is twice the number of elements in each direction
+    dnz, dny, dnx = corner_coords.shape
+    numelems = int((dnx * dny * dnz) / 8)
+    elemCorns = np.zeros((numelems, 8))
+
+    elemcounter = 0;
+    for k in range(0, dnz, 2):
+        for j in range(0, dny, 2):
+            for i in range(0, dnx, 2):
+                elemCorns[elemcounter, 0] = corner_coords[k, j, i]
+                elemCorns[elemcounter, 1] = corner_coords[k, j, i+1]
+                elemCorns[elemcounter, 2] = corner_coords[k, j+1, i+1]
+                elemCorns[elemcounter, 3] = corner_coords[k, j+1, i]
+                elemCorns[elemcounter, 4] = corner_coords[k+1, j, i]
+                elemCorns[elemcounter, 5] = corner_coords[k+1, j, i+1]
+                elemCorns[elemcounter, 6] = corner_coords[k+1, j+1, i+1]
+                elemCorns[elemcounter, 7] = corner_coords[k+1, j+1, i]
+                elemcounter += 1
+
+    return elemCorns
+
+def coordToCorn(coord, nz):
+    ''' Transform coord data (x, y) coordinates to (x, y) corners for each node '''
+
+    # Extract x and y coordinates from coord data
+    xdata = np.asarray(coord[:,:,0])
+    ydata = np.asarray(coord[:,:,1])
+
+    # Repeat all internal coordinates to double the size of the arrays
+    xcorn = np.repeat(np.repeat(xdata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
+    ycorn = np.repeat(np.repeat(ydata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
+
+    # Repeat each row 2 nz times
+    xcorn = np.array([xcorn] * 2 * nz)
+    ycorn = np.array([ycorn] * 2 * nz)
+
+    return xcorn, ycorn
+
+def elemCornToCoord(elemcorns, elemNodes):
+    ''' Transform coordinate data for each element corner to a unique node ordered
+    list of coordinates '''
+
+    nodes, idx = np.unique(elemNodes, return_index=True)
+    coords = elemcorns.flatten()[idx][np.nonzero(elemNodes.flatten()[idx])]
+
+    return coords
+
+def numberNodesInElems(elemcornz, active_elements):
+    ''' Number all unique nodes in grid including fault check'''
+
+    nz, ny, nx = active_elements.shape
+    elemcornz = elemcornz.reshape(nz, ny, nx, 8)
+    elemNodes = np.zeros((nz, ny, nx, 8), dtype=int)
+
+    nodenum = 1
+
+    # The following iterates over all elements, and checks if all corner nodes are unique
+    # or if they coincide with any previously visited elements. Only nodes that
+    # haven't been seen before are numbered. Importantly, after numbering a node any
+    # coincident nodes in inactive elements are also renumbered.
+
+    for k in range(0, nz):
+        for j in range(0, ny):
+            for i in range(0, nx):
+                if active_elements[k, j, i]:
+                    # Node 1
+                    if k > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k - 1, j, i, 4]) and elemNodes[k - 1, j, i, 4] != 0:
+                        elemNodes[k, j, i, 0] = elemNodes[k - 1, j, i, 4]
+                    elif j > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j - 1, i, 3]) and elemNodes[k, j - 1, i, 3] != 0:
+                        elemNodes[k, j, i, 0] = elemNodes[k, j - 1, i, 3]
+                    elif i > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j, i - 1, 1]) and elemNodes[k, j, i - 1, 1] != 0:
+                        elemNodes[k, j, i, 0] = elemNodes[k, j, i - 1, 1]
+                    else:
+                        # Add a new node number
+                        elemNodes[k, j, i, 0] = nodenum; nodenum +=1;
+                        # Also check backwards to duplicate node if previous cell was inactive
+                        if k > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k - 1, j, i, 4]) and elemNodes[k - 1, j, i, 4] == 0:
+                            elemNodes[k - 1, j, i, 4] = elemNodes[k, j, i, 0]
+                        elif j > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j - 1, i, 3]) and elemNodes[k, j - 1, i, 3] == 0:
+                            elemNodes[k, j - 1, i, 3] = elemNodes[k, j, i, 0]
+                        elif i > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j, i - 1, 1]) and elemNodes[k, j, i - 1, 1] == 0:
+                            elemNodes[k, j, i - 1, 1] = elemNodes[k, j, i, 0]
+
+                    # Node 2
+                    if k > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k - 1, j, i, 5]) and elemNodes[k - 1, j, i, 5] != 0:
+                        elemNodes[k, j, i, 1] = elemNodes[k - 1, j, i, 5]
+                    elif j > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k, j - 1, i, 2]) and elemNodes[k, j - 1, i, 2] != 0:
+                        elemNodes[k, j, i, 1] = elemNodes[k, j - 1, i, 2]
+                    else:
+                        # Add a new node number
+                        elemNodes[k, j, i, 1] = nodenum; nodenum +=1;
+                        # Also check backwards to duplicate node if previous cell was inactive
+                        if k > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k - 1, j, i, 5]) and elemNodes[k - 1, j, i, 5] == 0:
+                            elemNodes[k - 1, j, i, 5] = elemNodes[k, j, i, 1]
+                        elif j > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k, j - 1, i, 2]) and elemNodes[k, j - 1, i, 2] == 0:
+                            elemNodes[k, j - 1, i, 2] = elemNodes[k, j, i, 1]
+
+                    # Node 3
+                    if k > 0 and np.isclose(elemcornz[k, j, i, 2], elemcornz[k - 1, j, i, 6]) and elemNodes[k - 1, j, i, 6] != 0:
+                        elemNodes[k, j, i, 2] = elemNodes[k - 1, j, i, 6]
+                    else:
+                        # Add a new node number
+                        elemNodes[k, j, i, 2] = nodenum; nodenum +=1;
+                        # Also check backwards to duplicate node if previous cell was inactive
+                        if k > 0 and np.isclose(elemcornz[k, j, i, 2], elemcornz[k - 1, j, i, 6]) and elemNodes[k - 1, j, i, 6] == 0:
+                            elemNodes[k - 1, j, i, 6] = elemNodes[k, j, i, 2]
+
+                    # Node 4
+                    if k > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k - 1, j, i, 7]) and elemNodes[k - 1, j, i, 7] != 0:
+                        elemNodes[k, j, i, 3] = elemNodes[k - 1, j, i, 7]
+                    elif i > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k, j, i - 1, 2]) and elemNodes[k, j, i - 1, 2] != 0 :
+                        elemNodes[k, j, i, 3] = elemNodes[k, j, i - 1, 2]
+                    else:
+                        # Add a new node number
+                        elemNodes[k, j, i, 3] = nodenum; nodenum +=1;
+                        # Also check backwards to duplicate node if previous cell was inactive
+                        if k > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k - 1, j, i, 7]) and elemNodes[k - 1, j, i, 7] == 0:
+                            elemNodes[k - 1, j, i, 7] = elemNodes[k, j, i, 3]
+                        elif i > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k, j, i - 1, 2]) and elemNodes[k, j, i - 1, 2] == 0 :
+                            elemNodes[k, j, i - 1, 2] = elemNodes[k, j, i, 3]
+
+                    # Node 5
+                    if j > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j - 1, i, 7]) and elemNodes[k, j - 1, i, 7] != 0:
+                        elemNodes[k, j, i, 4] = elemNodes[k, j - 1, i, 7]
+                    elif i > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j, i - 1, 5]) and elemNodes[k, j, i - 1, 5] != 0:
+                        elemNodes[k, j, i, 4] = elemNodes[k, j, i - 1, 5]
+                    else:
+                        # Add a new node number
+                        elemNodes[k, j, i, 4] = nodenum; nodenum +=1;
+                        # Also check backwards to duplicate node if previous cell was inactive
+                        if j > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j - 1, i, 7]) and elemNodes[k, j - 1, i, 7] == 0:
+                            elemNodes[k, j - 1, i, 7] = elemNodes[k, j, i, 4]
+                        elif i > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j, i - 1, 5]) and elemNodes[k, j, i - 1, 5] == 0:
+                            elemNodes[k, j, i - 1, 5] = elemNodes[k, j, i, 4]
+
+                    # Node 6
+                    if j > 0 and np.isclose(elemcornz[k, j, i, 5], elemcornz[k, j - 1, i, 6]) and elemNodes[k, j - 1, i, 6] != 0:
+                        elemNodes[k, j, i, 5] = elemNodes[k, j - 1, i, 6]
+                    else:
+                        # Add a new node number
+                        elemNodes[k, j, i, 5] = nodenum; nodenum +=1;
+                        # Also check backwards to duplicate node if previous cell was inactive
+                        if j > 0 and np.isclose(elemcornz[k, j, i, 5], elemcornz[k, j - 1, i, 6]) and elemNodes[k, j - 1, i, 6] == 0:
+                            elemNodes[k, j - 1, i, 6] = elemNodes[k, j, i, 5]
+
+                    # Node 7
+                    elemNodes[k, j, i, 6] = nodenum; nodenum +=1;
+
+                    # Node 8
+                    if i > 0 and np.isclose(elemcornz[k, j, i, 7], elemcornz[k, j, i - 1, 6]) and elemNodes[k, j, i - 1, 6] != 0:
+                        elemNodes[k, j, i, 7] = elemNodes[k, j, i - 1, 6]
+                    else:
+                        # Add a new node number
+                        elemNodes[k, j, i, 7] = nodenum; nodenum +=1;
+                        # Also check backwards to duplicate node if previous cell was inactive
+                        if i > 0 and np.isclose(elemcornz[k, j, i, 7], elemcornz[k, j, i - 1, 6]) and elemNodes[k, j, i - 1, 6] == 0:
+                            elemNodes[k, j, i - 1, 6] = elemNodes[k, j, i, 7]
+
+    return elemNodes
