@@ -81,10 +81,18 @@ def exodiff_test(key, use_official_api, exodiff):
     filename = tests[key]['filename']
     testfilename = os.path.join(filepath, filename)
 
+    command = ['./em2ex.py']
+    arguments = ['-f']
+
     if use_official_api:
-        subprocess.check_output(['./em2ex.py', '-f', '--use-official-api', testfilename])
-    else:
-        subprocess.check_output(['./em2ex.py', '-f', testfilename])
+        arguments.append('--use-official-api')
+
+    if 'cli_args' in tests[key].keys():
+        arguments.extend(tests[key]['cli_args'].split())
+
+    command.extend(arguments)
+    command.append(testfilename)
+    subprocess.check_output(command)
 
     # Compare the converted model with a gold file using exodiff
     try:
