@@ -165,6 +165,10 @@ def parseLeapfrog(f, args):
                     node_list[n] = nid
                     n += 1
 
+    # Flip the Z coordinates if specified
+    if args.flip_z:
+        zcoords = - zcoords
+
     node_order = np.asarray(node_list)
     pressure = np.asarray(node_file['pressure'])  # can add .tolist() to mke these lists
     temperature = np.asarray(node_file['temperature'])

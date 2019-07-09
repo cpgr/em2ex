@@ -54,7 +54,7 @@ the default environment. To use the Exodus python API, the path to the python AP
 export PYTHONPATH=$PYTHONPATH:/opt/moose/seacas/lib
 ```
 
-For non-MOOSE users, 'SEACAS' can be installed manually and the location of `exodus.py` added to `PYTHONPATH`.
+For non-MOOSE users, `SEACAS` can be installed manually and the location of `exodus.py` added to `PYTHONPATH`.
 
 ## Usage
 
@@ -102,6 +102,7 @@ optional arguments:
   -f, --force           Overwrite filename.e if it exists
   -u, --use-official-api
                         Use exodus.py to write files
+  --flip                Flip the sign of the Z coordinates
 ```
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
@@ -152,7 +153,7 @@ Second, the user will need to create a second block model in Leapfrog that is n+
 ./run_tests.py
 ```
 
-Alternatively, to avoid installing the entire [`SEACAS`](https://github.com/gsjaardema/seacas) package) just to run the test suite, the python [`pyexodiff`](https://github.com/cpgr/pyexodiff) package can be installed, and used in the test suite using
+Alternatively, to avoid installing the entire [`SEACAS`](https://github.com/gsjaardema/seacas) package just to run the test suite, the python [`pyexodiff`](https://github.com/cpgr/pyexodiff) package can be installed, and used in the test suite using
 ```bash
 python -m pytest -v --exodiff=pyexodiff.py run_tests.py
 ```
