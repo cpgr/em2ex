@@ -18,6 +18,12 @@ faulted:
   type: exodiff
   gold: faulted.e
 
+simple_cube_flipped_z:
+  filename: simple_cube.grdecl
+  type: exodiff
+  cli_args: --flip
+  gold: simple_cube_flipped_z.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception

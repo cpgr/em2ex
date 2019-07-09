@@ -216,6 +216,10 @@ def parseEclipse(f, args):
     ycoords = elemCornToCoord(elemcorny, elemNodes)
     zcoords = elemCornToCoord(elemcornz, elemNodes)
 
+    # Flip the Z coordinates if specified
+    if args.flip_z:
+        zcoords = - zcoords
+
     # Remove any zeros (nodes start at 1)
     elemNodes = elemNodes[~np.any(elemNodes == 0, axis=1)]
 
