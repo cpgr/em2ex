@@ -145,6 +145,11 @@ def parseEclipse(f, args):
     # the first index gives the layer, the second the y coordinates and the third
     # the x coordinates
     zcorn = np.asarray(zcornlist).reshape(2*nz, 2*ny, 2*nx)
+
+    # Flip the Z coordinates if specified
+    if args.flip_z:
+        zcorn = - zcorn
+
     # Also make sure that zcorn is in increasing z order
     zcorn.sort(axis=0)
 
@@ -215,10 +220,6 @@ def parseEclipse(f, args):
     xcoords = elemCornToCoord(elemcornx, elemNodes)
     ycoords = elemCornToCoord(elemcorny, elemNodes)
     zcoords = elemCornToCoord(elemcornz, elemNodes)
-
-    # Flip the Z coordinates if specified
-    if args.flip_z:
-        zcoords = - zcoords
 
     # Remove any zeros (nodes start at 1)
     elemNodes = elemNodes[~np.any(elemNodes == 0, axis=1)]
