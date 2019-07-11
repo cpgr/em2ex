@@ -3,6 +3,7 @@
 import numpy as np
 from exodus_model.ExodusModel import ExodusModel
 from readers.reader_utils import *
+import os
 
 class EclipseData(object):
     '''Class containing data from an Eclipse file'''
@@ -103,54 +104,56 @@ def processData(line):
             data.extend(expanded)
     return data
 
-def parseEclipse(f, args):
-    '''Parse the ECLIPSE file and return node coordinates and material properties'''
+def readEclipse(f, eclipse):
+    ''' Read an Eclipse grdecl file and store the data in an Eclipse object '''
 
     # Keywords that may be read in the Eclipse file
     ECLIPSE_KEYWORDS =  ['ACTNUM', 'SATNUM', 'PORO', 'PERMX', 'PERMY', 'PERMZ']
 
+    # Open the .grdecl file for reading
+    with open(f, 'r') as file:
+        for line in file:
+
+            if line.startswith('--') or  not line.strip():
+                # Skip comments and blank lines
+                continue
+
+            elif line.startswith('SPECGRID'):
+                eclipse.specgrid = next(file).split()
+
+            elif line.startswith('COORD') and 'COORDSYS' not in line:
+                eclipse.coord = readBlock(file)
+
+            elif line.startswith('ZCORN'):
+                eclipse.zcorn = readBlock(file)
+
+            elif line.startswith('INCLUDE'):
+                include_file = next(file).split()[0]
+                filepath = os.path.split(f)[0]
+                readEclipse(os.path.join(filepath, include_file), eclipse)
+
+            elif line.split()[0] in ECLIPSE_KEYWORDS:
+                # Read in all properties known to the reader (in ECLIPSE_KEYWORDS)
+                prop = line.split()[0]
+                proplistname = prop.lower() + 'list'
+                proplistname = np.asarray(readBlock(file))
+                eclipse.elemProps[prop] = proplistname
+
+            else:
+                # Skip all unkown sections
+                continue
+
+    return
+
+
+def parseEclipse(f, args):
+    '''Parse the ECLIPSE file and return node coordinates and material properties'''
+
     # Eclipse data object
     eclipse = EclipseData()
 
-    # Open the .grdecl file for reading
-    file = open(f)
-
-    # Dict for storing elemental (cell-centred) reservoir properties
-    # elemProps = {};
-    #
-    # # Declare empty lists for all required keywords
-    # specgridlist = []
-    # coordlist = []
-    # zcornlist = []
-
-    for line in file:
-
-        if line.startswith('--') or  not line.strip():
-            # Skip comments and blank lines
-            continue
-
-        elif line.startswith('SPECGRID'):
-            eclipse.specgrid = next(file).split()
-
-        elif line.startswith('COORD') and 'COORDSYS' not in line:
-            eclipse.coord = readBlock(file)
-
-        elif line.startswith('ZCORN'):
-            eclipse.zcorn = readBlock(file)
-
-        elif line.split()[0] in ECLIPSE_KEYWORDS:
-            # Read in all properties known to the reader (in ECLIPSE_KEYWORDS)
-            prop = line.split()[0]
-            proplistname = prop.lower() + 'list'
-            proplistname = np.asarray(readBlock(file))
-            eclipse.elemProps[prop] = proplistname
-
-        else:
-            # Skip all unkown sections
-            continue
-
-    # Close the file after parsing
-    file.close()
+    # Read the Eclipse grdecl file
+    readEclipse(f, eclipse)
 
     # Check that required SPECGRID, COORD and ZCORN data has been supplied
     if not eclipse.specgrid:
@@ -165,11 +168,7 @@ def parseEclipse(f, args):
         print("No ZCORN data found in ", f)
         exit()
 
-    # The number of elements in the x, y and z directions are specified in the
-    # SPECGRID data
-    # nx = int(specgridlist[0])
-    # ny = int(specgridlist[1])
-    # nz = int(specgridlist[2])
+    # The number of elements in the x, y and z directions
     nx = eclipse.nx
     ny = eclipse.ny
     nz = eclipse.nz
