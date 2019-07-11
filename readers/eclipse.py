@@ -33,22 +33,6 @@ def processData(line):
             data.extend(expanded)
     return data
 
-def readKeyword(f, keyword):
-    '''Read keyword data from grdecl file'''
-    for line in f:
-        # Skip comments and blank lines
-        if line.startswith('--') or not line.strip():
-            continue
-
-        elif line.startswith(keyword):
-            block = readBlock(f)
-
-        else:
-            # Skip all unknown sections
-            continue
-
-    return block
-
 def parseEclipse(f, args):
     '''Parse the ECLIPSE file and return node coordinates and material properties'''
 
