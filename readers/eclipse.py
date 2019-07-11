@@ -4,6 +4,76 @@ import numpy as np
 from exodus_model.ExodusModel import ExodusModel
 from readers.reader_utils import *
 
+class EclipseData(object):
+    '''Class containing data from an Eclipse file'''
+
+    def __init__(self):
+        self._specgrid = None
+        self._nx = None
+        self._ny = None
+        self._nz = None
+        self._coord = None
+        self._zcorn = None
+        self._elemProps = {}
+
+    # Grid size data from SPECGRID
+    @property
+    def specgrid(self):
+        return self._specgrid
+
+    @specgrid.setter
+    def specgrid(self, spec):
+        self._specgrid = spec
+
+    # Number of elements
+    @property
+    def nx(self):
+        assert self._specgrid, 'SPECGRID data must be loaded before getting nx'
+        return int(self._specgrid[0])
+
+    @property
+    def ny(self):
+        assert self._specgrid, 'SPECGRID data must be loaded before getting ny'
+        return int(self._specgrid[1])
+
+    @property
+    def nz(self):
+        assert self._specgrid, 'SPECGRID data must be loaded before getting nz'
+        return int(self._specgrid[2])
+
+    # Nodal coordinates in x and y directions
+    @property
+    def coord(self):
+        return self._coord
+
+    @coord.setter
+    def coord(self, coords):
+        self._coord = coords
+
+    # Nodal corner coordinates in z direction
+    @property
+    def zcorn(self):
+        return self._zcorn
+
+    @zcorn.setter
+    def zcorn(self, zcorn):
+        self._zcorn = zcorn
+
+    # Element properties
+    @property
+    def elemProps(self, prop = None):
+        if not prop:
+            return self._elemProps
+        else:
+            return self._elemProps[prop]
+
+    @elemProps.setter
+    def elemProps(self, prop, value = None):
+        if not value:
+            self._elemProps = prop
+        else:
+            self._elemProps[prop] = value
+
 def readBlock(f):
     '''Reads block of data and returns it as a list'''
     block = []
@@ -39,16 +109,19 @@ def parseEclipse(f, args):
     # Keywords that may be read in the Eclipse file
     ECLIPSE_KEYWORDS =  ['ACTNUM', 'SATNUM', 'PORO', 'PERMX', 'PERMY', 'PERMZ']
 
+    # Eclipse data object
+    eclipse = EclipseData()
+
     # Open the .grdecl file for reading
     file = open(f)
 
     # Dict for storing elemental (cell-centred) reservoir properties
-    elemProps = {};
-
-    # Declare empty lists for all required keywords
-    specgridlist = []
-    coordlist = []
-    zcornlist = []
+    # elemProps = {};
+    #
+    # # Declare empty lists for all required keywords
+    # specgridlist = []
+    # coordlist = []
+    # zcornlist = []
 
     for line in file:
 
@@ -57,20 +130,20 @@ def parseEclipse(f, args):
             continue
 
         elif line.startswith('SPECGRID'):
-            specgridlist = next(file).split()
+            eclipse.specgrid = next(file).split()
 
         elif line.startswith('COORD') and 'COORDSYS' not in line:
-            coordlist = readBlock(file)
+            eclipse.coord = readBlock(file)
 
         elif line.startswith('ZCORN'):
-            zcornlist = readBlock(file)
+            eclipse.zcorn = readBlock(file)
 
         elif line.split()[0] in ECLIPSE_KEYWORDS:
             # Read in all properties known to the reader (in ECLIPSE_KEYWORDS)
             prop = line.split()[0]
             proplistname = prop.lower() + 'list'
             proplistname = np.asarray(readBlock(file))
-            elemProps[prop] = proplistname
+            eclipse.elemProps[prop] = proplistname
 
         else:
             # Skip all unkown sections
@@ -80,37 +153,40 @@ def parseEclipse(f, args):
     file.close()
 
     # Check that required SPECGRID, COORD and ZCORN data has been supplied
-    if not specgridlist:
+    if not eclipse.specgrid:
         print("No SPECGRID data found in ", f)
         exit()
 
-    if not coordlist:
+    if not eclipse.coord:
         print("No COORD data found in ", f)
         exit()
 
-    if not zcornlist:
+    if not eclipse.zcorn:
         print("No ZCORN data found in ", f)
         exit()
 
     # The number of elements in the x, y and z directions are specified in the
     # SPECGRID data
-    nx = int(specgridlist[0])
-    ny = int(specgridlist[1])
-    nz = int(specgridlist[2])
+    # nx = int(specgridlist[0])
+    # ny = int(specgridlist[1])
+    # nz = int(specgridlist[2])
+    nx = eclipse.nx
+    ny = eclipse.ny
+    nz = eclipse.nz
 
     # Check the number of COORD entries parsed is correct (6 points per entry)
-    if (nx+1)*(ny+1)*6 != len(list(coordlist)):
+    if (nx+1)*(ny+1)*6 != len(list(eclipse.coord)):
         print("The number of COORD entries read is not correct")
         exit()
 
     # Check the number of ZCORN entries parsed is correct
-    if (2 * nx)*(2 * ny) *(2 * nz) != len(list(zcornlist)):
+    if (2 * nx)*(2 * ny) *(2 * nz) != len(list(eclipse.zcorn)):
         print("The number of ZCORN entries read is not correct")
         exit()
 
     # Check all of the elemental properties that have been parsed
-    for prop in elemProps:
-        if elemProps[prop].size != nx*ny*nz:
+    for prop in eclipse.elemProps:
+        if eclipse.elemProps[prop].size != nx * ny * nz:
             print("The number of " + prop + " entries read is not correct")
             exit()
 
@@ -119,7 +195,7 @@ def parseEclipse(f, args):
 
     # Now the data can be reshaped and processed for easy use
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
-    coord = np.asarray(coordlist).reshape(ny+1, nx+1, 6)
+    coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
 
     # Transform coord data to zcorn format (so that there is an x and y coordinate
     # for each node in the grid)
@@ -128,7 +204,7 @@ def parseEclipse(f, args):
     # The ZCORN data varies by x, y and then z. Reshape it into an array where
     # the first index gives the layer, the second the y coordinates and the third
     # the x coordinates
-    zcorn = np.asarray(zcornlist).reshape(2*nz, 2*ny, 2*nx)
+    zcorn = np.asarray(eclipse.zcorn).reshape(2*nz, 2*ny, 2*nx)
 
     # Flip the Z coordinates if specified
     if args.flip_z:
@@ -144,8 +220,8 @@ def parseEclipse(f, args):
     elemcornz = elemCornerCoords(zcorn)
 
     # Some elements may be inactive (ACTNUM = 0), so don't count them
-    if 'ACTNUM' in elemProps:
-        active_elements = elemProps['ACTNUM'].reshape(nz, ny, nx).astype(int)
+    if 'ACTNUM' in eclipse.elemProps:
+        active_elements = eclipse.elemProps['ACTNUM'].reshape(nz, ny, nx).astype(int)
     else:
         # All elements are active
         active_elements = np.ones((nz, ny, nx), dtype = int)
@@ -180,8 +256,8 @@ def parseEclipse(f, args):
     # are numbered consecutively, then all elements in the next block, etc.)
 
     # Block IDs (needed to provide correct element numbering)
-    if 'SATNUM' in elemProps:
-        blocks = elemProps['SATNUM'].astype(int).reshape((nz, ny, nx))
+    if 'SATNUM' in eclipse.elemProps:
+        blocks = eclipse.elemProps['SATNUM'].astype(int).reshape((nz, ny, nx))
     else:
         blocks = np.zeros((nz, ny, nx), dtype=int)
 
@@ -209,8 +285,8 @@ def parseEclipse(f, args):
     elemNodes = elemNodes[~np.any(elemNodes == 0, axis=1)]
 
     # Remove elemental properties in inactive elements
-    for prop in elemProps:
-        elemProps[prop] = elemProps[prop][active_elements.flatten() > 0]
+    for prop in eclipse.elemProps:
+        eclipse.elemProps[prop] = eclipse.elemProps[prop][active_elements.flatten() > 0]
 
     # Add data to the ExodusModel object
     model = ExodusModel()
@@ -220,7 +296,7 @@ def parseEclipse(f, args):
     model.nodeIds = nodeIds
     model.elemIds = elemIds
     model.elemNodes = elemNodes
-    model.elemVars = elemProps
+    model.elemVars = eclipse.elemProps
     model.numElems = num_active_elements
     model.numNodes = num_active_nodes
     model.blockIds = blocks.flatten()[active_elements.flatten()>0]
