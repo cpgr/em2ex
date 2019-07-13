@@ -209,9 +209,6 @@ def parseEclipse(f, args):
     if args.flip_z:
         zcorn = - zcorn
 
-    # Also make sure that zcorn is in increasing z order
-    zcorn.sort(axis=0)
-
     # Now transform all of the coordinate arrays into element-ordered array, where
     # each row corresponds to a single element containing eight corners
     elemcornx = elemCornerCoords(xcorn)
@@ -283,6 +280,10 @@ def parseEclipse(f, args):
     # Remove any zeros (nodes start at 1)
     elemNodes = elemNodes[~np.any(elemNodes == 0, axis=1)]
 
+    # Reorder elemNodes for correct ordering if flipped
+    if args.flip_z:
+        elemNodes = elemNodes[:, [4, 5, 6, 7, 0, 1, 2, 3]]
+
     # Remove elemental properties in inactive elements
     for prop in eclipse.elemProps:
         eclipse.elemProps[prop] = eclipse.elemProps[prop][active_elements.flatten() > 0]
@@ -306,11 +307,20 @@ def parseEclipse(f, args):
     else:
         addSideSets(model)
 
+        # And flip the top and bottom ids if mesh is flipped
+        if args.flip_z:
+            model.sideSetSides[0], model.sideSetSides[5] = model.sideSetSides[5], model.sideSetSides[0]
+            model.sideSetNames[0], model.sideSetNames[5] = model.sideSetNames[5], model.sideSetNames[0]
+
     # Add nodesets if required
     if args.omit_nodesets:
         model.numNodeSets = 0
     else:
         addNodeSets(model)
+
+        # And flip the top and bottom ids if mesh is flipped
+        if args.flip_z:
+            model.nodeSetNames[0], model.nodeSetNames[5] = model.nodeSetNames[5], model.nodeSetNames[0]
 
     return model
 
