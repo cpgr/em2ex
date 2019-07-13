@@ -5,6 +5,9 @@
 `em2ex` is a python program that converts a reservoir model to an Exodus II file that can then be used in
 a simulation tool (such as [MOOSE](http://www.mooseframework.org)) or viewed in a visualisation tool (such as [Paraview](https://www.paraview.org)).
 
+![Johansen formation](images/johansen.png)
+[*Johansen formation*](https://www.sintef.no/projectweb/matmora/downloads/johansen/) *converted to Exodus format from Eclipse dataset*
+
 Currently, `em2ex` supports two reservoir modelling formats:
 
 - Eclipse (ASCII files)
