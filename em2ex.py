@@ -13,6 +13,7 @@ def get_parser():
 
     parser = argparse.ArgumentParser(description='Converts earth model to Exodus II format')
     parser.add_argument('filename')
+    parser.add_argument('-o', '--output', default = None, dest = 'output_file', help = 'File name for output')
     parser.add_argument('--filetype', default = None, dest = 'filetype',
         choices = ['eclipse', 'leapfrog'], help = 'Explicitly state the filetype for unknown extensions')
     parser.add_argument('--no-nodesets', dest = 'omit_nodesets', action = 'store_true', help = 'Disable addition of nodesets')
@@ -79,9 +80,13 @@ def main():
     elemType = 'HEX8'
     nodesPerElem = 8
 
-    # If force_overwrite, then clobber any exisiting filename_base.e file
-    output_file = filename_base + '.e'
+    # Output file
+    if args.output_file:
+        output_file = args.output_file
+    else:
+        output_file = filename_base + '.e'
 
+    # If force_overwrite, then clobber any exisiting filename_base.e file
     if args.force_overwrite and os.path.exists(output_file):
         try:
             os.remove(output_file)
