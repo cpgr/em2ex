@@ -202,6 +202,7 @@ The test suite is run automatically on all pull requests to ensure that `em2ex` 
 `em2ex` has been developed by
 - Chris Green, CSIRO ([cpgr](https://github.com/cpgr))
 - Rob Podgorney, INL ([rpodgorney](https://github.com/rpodgorney))
+- Michael Volkov, John Monash Science School ([mickydroid](https://github.com/MickyDroid))
 
 New contributions are welcome, using the pull request feature of GitHub.
 
