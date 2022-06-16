@@ -1,0 +1,8 @@
+name: em2ex
+channels:
+- defaults
+dependencies:
+- pandas
+- netCDF4
+- pytest
+- pyYAML
