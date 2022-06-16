@@ -1,0 +1,3 @@
+[submodule "pyexodiff"]
+	path = pyexodiff
+	url = git@github.com:cpgr/pyexodiff
