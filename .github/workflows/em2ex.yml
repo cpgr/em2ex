@@ -10,11 +10,8 @@ jobs:
 
    steps:
    - uses: actions/checkout@v3
-   - name: Checkout
-     uses: actions/checkout@master
      with:
-       repository: cpgr/pyexodus
-       path: '$GITHUB_WORKSPACE/../'
+       submodules: recursive
    - name: Set up Python 3.10
      uses: actions/setup-python@v3
      with:
@@ -35,4 +32,4 @@ jobs:
        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
    - name: Test with pytest
      run: |
-       python -m pytest -v --exodiff $GITHUB_WORKSPACE/pyexodiff/pyexodiff.py run_tests.py
+       python -m pytest -v --exodiff pyexodiff/pyexodiff.py run_tests.py
