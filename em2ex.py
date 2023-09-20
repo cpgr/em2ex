@@ -21,6 +21,7 @@ def get_parser():
     parser.add_argument('-f', '--force', dest = 'force_overwrite', action = 'store_true', help = 'Overwrite filename.e if it exists')
     parser.add_argument('-u', '--use-official-api', dest = 'use_official_api', action = 'store_true', help = 'Use exodus.py to write files')
     parser.add_argument('--flip', dest = 'flip_z', action = 'store_true', help = 'Flip the sign of the Z coordinates')
+    parser.add_argument('--mapaxes', dest = 'use_mapaxes', action = 'store_true', help = 'Use the MAPAXES coordinates for an Eclipse file')
     return parser
 
 def main():

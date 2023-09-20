@@ -40,10 +40,10 @@ The following python packages are required to run `em2ex`
 
 The first two are typically already installed, but if not, can be installed using `pip`. The `netCDF4` package can be installed using `pip` as well:
 ```bash
-pip install netdf4
+pip install netcdf4
 ```
 
-Two additional python package, `pytest` and `pyYAML` are required to run the test script. Again, these can be installed using `pip`
+Two additional python package, `pytest` and `pyYAML` are required to run the test script. Again, these can be installed using `pip`, e.g.
 ```bash
 pip install pytest
 ```
@@ -107,6 +107,7 @@ optional arguments:
   -u, --use-official-api
                         Use exodus.py to write files
   --flip                Flip the sign of the Z coordinates
+  --mapaxes             Use the MAPAXES coordinates for an Eclipse file
 ```
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
