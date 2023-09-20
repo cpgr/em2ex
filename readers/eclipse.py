@@ -211,10 +211,6 @@ def parseEclipse(f, args):
             if len(list(eclipse.gridunit)) == 1:
                 eclipse.gridunit.append("GRID")
 
-        else:
-            # Default GRIDUNIT to ['METRES', 'GRID']
-            eclipse.gridunit = ["METRES", "GRID"]
-
     # The number of elements in the x, y and z directions
     nx = eclipse.nx
     ny = eclipse.ny
@@ -244,8 +240,12 @@ def parseEclipse(f, args):
     coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
 
      # Transform the coordinates to MAPAXES coordinates if use_mapaxes is specified and
-     # a GRIDUNIT exists and GRIDUNIT = GRID
+     # MAPAXES exists and GRIDUNIT exists and GRIDUNIT = GRID
     if args.use_mapaxes:
+
+        if not eclipse.mapaxes:
+            print("No MAPAXES keyword exists, so don't specify --mapaxes")
+            exit()
 
         transform_coords = False
         if eclipse.gridunit:
