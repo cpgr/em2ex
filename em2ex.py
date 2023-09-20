@@ -24,6 +24,7 @@ def get_parser():
     parser.add_argument('--translate', nargs = 2, dest = 'translate', type = float, help = 'Translate the (x, y) coordinates by this amount')
     parser.add_argument('--progress', dest = 'progress', default = 'auto', choices = ['auto', 'on', 'off'],
         help = 'Progress bars for Eclipse conversion: auto (>100000 cells), on, or off')
+    parser.add_argument('--mapaxes', dest = 'use_mapaxes', action = 'store_true', help = 'Use the MAPAXES coordinates for an Eclipse file')
     return parser
 
 def main():
