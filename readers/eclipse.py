@@ -253,9 +253,14 @@ def parseEclipse(f, args):
                 transform_coords = True
 
         if transform_coords:
+            # Origin and rotation vectors from MAPAXES
             xorigin, yorigin = eclipse.mapaxes[2], eclipse.mapaxes[3]
             xvec = np.array([eclipse.mapaxes[4] - xorigin, eclipse.mapaxes[5] - yorigin])
             yvec = np.array([eclipse.mapaxes[0] - xorigin, eclipse.mapaxes[1] - yorigin])
+
+            # Normalise the rotation vectors
+            xvec = xvec / np.sqrt(xvec[0]**2 + xvec[1]**2)
+            yvec = yvec / np.sqrt(yvec[0]**2 + yvec[1]**2)
 
             # The x and y coordinates from COORD
             xdata = np.asarray(coord[:,:,0])
