@@ -266,8 +266,8 @@ def parseEclipse(f, args):
             xdata = np.asarray(coord[:,:,0])
             ydata = np.asarray(coord[:,:,1])
 
-            newx = xvec[0] * (xdata - xorigin) + xvec[1] * (ydata - yorigin)
-            newy = yvec[0] * (xdata - xorigin) + yvec[1] * (ydata - yorigin)
+            newx = xvec[0] * (-xdata - xorigin) + xvec[1] * (ydata - yorigin)
+            newy = yvec[0] * (-xdata - xorigin) + yvec[1] * (ydata - yorigin)
 
             coord[:,:,0], coord[:,:,1] = newx, newy
 
