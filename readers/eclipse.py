@@ -10,6 +10,8 @@ class EclipseData(object):
 
     def __init__(self):
         self._specgrid = None
+        self._mapaxes = None
+        self._gridunit = None
         self._nx = None
         self._ny = None
         self._nz = None
@@ -25,6 +27,24 @@ class EclipseData(object):
     @specgrid.setter
     def specgrid(self, spec):
         self._specgrid = spec
+
+    # Map axes data from MAPAXES
+    @property
+    def mapaxes(self):
+        return self._mapaxes
+
+    @mapaxes.setter
+    def mapaxes(self, axes):
+        self._mapaxes = axes
+
+    # Grid unit data from GRIDUNIT
+    @property
+    def gridunit(self):
+        return self._gridunit
+
+    @gridunit.setter
+    def gridunit(self, grid):
+        self._gridunit = grid
 
     # Number of elements
     @property
@@ -121,6 +141,13 @@ def readEclipse(f, eclipse):
             elif line.startswith('SPECGRID'):
                 eclipse.specgrid = next(file).split()
 
+            elif line.startswith('MAPAXES'):
+                eclipse.mapaxes = readBlock(file)
+
+            elif line.startswith('GRIDUNIT'):
+                eclipse.gridunit = next(file).split()
+                eclipse.gridunit.pop()
+
             elif line.startswith('COORD') and 'COORDSYS' not in line:
                 eclipse.coord = readBlock(file)
 
@@ -168,6 +195,22 @@ def parseEclipse(f, args):
         print("No ZCORN data found in ", f)
         exit()
 
+    # Check the optional MAPAXES data
+    if args.use_mapaxes:
+        if eclipse.mapaxes:
+            if len(list(eclipse.mapaxes)) != 6:
+                print("The number of MAPAXES entries read is not correct")
+                exit()
+
+        if eclipse.gridunit:
+            if len(list(eclipse.gridunit)) > 2:
+                print("The number of GRIDUNIT entries read is not correct")
+                exit()
+
+            # The second element is either MAP or blank - if blank make it GRID
+            if len(list(eclipse.gridunit)) == 1:
+                eclipse.gridunit.append("GRID")
+
     # The number of elements in the x, y and z directions
     nx = eclipse.nx
     ny = eclipse.ny
@@ -195,6 +238,38 @@ def parseEclipse(f, args):
     # Now the data can be reshaped and processed for easy use
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
     coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
+
+     # Transform the coordinates to MAPAXES coordinates if use_mapaxes is specified and
+     # MAPAXES exists and GRIDUNIT exists and GRIDUNIT = GRID
+    if args.use_mapaxes:
+
+        if not eclipse.mapaxes:
+            print("No MAPAXES keyword exists, so don't specify --mapaxes")
+            exit()
+
+        transform_coords = False
+        if eclipse.gridunit:
+            if eclipse.gridunit[1] == "GRID":
+                transform_coords = True
+
+        if transform_coords:
+            # Origin and rotation vectors from MAPAXES
+            xorigin, yorigin = eclipse.mapaxes[2], eclipse.mapaxes[3]
+            xvec = np.array([eclipse.mapaxes[4] - xorigin, eclipse.mapaxes[5] - yorigin])
+            yvec = np.array([eclipse.mapaxes[0] - xorigin, eclipse.mapaxes[1] - yorigin])
+
+            # Normalise the rotation vectors
+            xvec = xvec / np.sqrt(xvec[0]**2 + xvec[1]**2)
+            yvec = yvec / np.sqrt(yvec[0]**2 + yvec[1]**2)
+
+            # The x and y coordinates from COORD
+            xdata = np.asarray(coord[:,:,0])
+            ydata = np.asarray(coord[:,:,1])
+
+            newx = xvec[0] * (-xdata - xorigin) + xvec[1] * (ydata - yorigin)
+            newy = yvec[0] * (-xdata - xorigin) + yvec[1] * (ydata - yorigin)
+
+            coord[:,:,0], coord[:,:,1] = newx, newy
 
     # Transform coord data to zcorn format (so that there is an x and y coordinate
     # for each node in the grid)
