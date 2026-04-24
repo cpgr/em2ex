@@ -372,6 +372,13 @@ def parseEclipse(f, args):
         # All elements are active
         active_elements = np.ones((nz, ny, nx), dtype = int)
 
+    # If pinched or distorted elements are removed, these elements will also be set to
+    # be inactive.
+    # Check for pinched out elements (where the vertical distance between nodes is less than tol)
+    if args.no_pinch:
+        distorted = distortedElem(elemcornx, elemcorny, elemcornz, args.pinch_tol).reshape(nz, ny, nx)
+        active_elements[distorted] = 0
+
     # The number of active elements is
     num_active_elements = np.count_nonzero(active_elements)
 
@@ -540,6 +547,20 @@ def elemCornToCoord(elemcorns, elemNodes):
     coords = elemcorns.flatten()[idx][np.nonzero(elemNodes.flatten()[idx])]
 
     return coords
+
+def distortedElem(elemcornx, elemcorny, elemcornz, tol):
+    ''' Returns a boolean array (numelems,) that is True for elements where any
+    two corners are coincident within tol. Distorted/pinched-out elements have
+    two or more corners at the same (x, y, z) location. '''
+    from itertools import combinations
+    corners = np.stack([elemcornx, elemcorny, elemcornz], axis=2)  # (numelems, 8, 3)
+    distorted = np.zeros(corners.shape[0], dtype=bool)
+    for a, b in combinations(range(8), 2):
+        dist = np.linalg.norm(corners[:, a, :] - corners[:, b, :], axis=1)
+        distorted |= dist < tol
+    return distorted
+
+
 
 def numberNodesInElems(elemcornz, active_elements, show_progress=False):
     ''' Number all unique nodes in grid including fault check'''

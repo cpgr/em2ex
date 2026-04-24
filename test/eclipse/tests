@@ -56,6 +56,12 @@ simple_cube_flipped_xy:
   type: exodiff
   gold: simple_cube.e
 
+simple_cube_pinch:
+  filename: simple_cube_pinch.grdecl
+  type: exodiff
+  cli_args: --pinch
+  gold: simple_cube_pinch.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception
