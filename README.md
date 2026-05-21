@@ -89,7 +89,7 @@ A number of optional commandline options are available, and can be seen by passi
 $ ./em2ex.py --help
 
 usage: em2ex.py [-h] [--filetype {eclipse,leapfrog}] [--no-nodesets]
-                [--no-sidesets] [-f] [-u]
+                [--no-sidesets] [-f] [-u] [--progress {auto,on,off}]
                 filename
 
 Converts earth model to Exodus II format
@@ -107,6 +107,9 @@ optional arguments:
   -u, --use-official-api
                         Use exodus.py to write files
   --flip                Flip the sign of the Z coordinates
+  --progress {auto,on,off}
+                        Progress bars for Eclipse conversion: auto (>100000
+                        cells), on, or off
 ```
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
