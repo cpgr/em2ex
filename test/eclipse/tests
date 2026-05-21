@@ -29,6 +29,12 @@ simple_cube_flipped_z:
   cli_args: --flip
   gold: simple_cube_flipped_z.e
 
+simple_cube_translated:
+  filename: simple_cube.grdecl
+  type: exodiff
+  cli_args: --translate 1 2
+  gold: simple_cube_translated.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception

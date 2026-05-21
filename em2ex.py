@@ -21,6 +21,7 @@ def get_parser():
     parser.add_argument('-f', '--force', dest = 'force_overwrite', action = 'store_true', help = 'Overwrite filename.e if it exists')
     parser.add_argument('-u', '--use-official-api', dest = 'use_official_api', action = 'store_true', help = 'Use exodus.py to write files')
     parser.add_argument('--flip', dest = 'flip_z', action = 'store_true', help = 'Flip the sign of the Z coordinates')
+    parser.add_argument('--translate', nargs = 2, dest = 'translate', type = float, help = 'Translate the (x, y) coordinates by this amount')
     return parser
 
 def main():
