@@ -196,6 +196,11 @@ def parseEclipse(f, args):
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
     coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
 
+    # Translate the coordinates if the translate commandline option is specified
+    if args.translate:
+        coord[:,:,0] = coord[:,:,0] + args.translate[0]
+        coord[:,:,1] = coord[:,:,1] + args.translate[1]
+
     # Transform coord data to zcorn format (so that there is an x and y coordinate
     # for each node in the grid)
     xcorn, ycorn = coordToCorn(coord, nz)
