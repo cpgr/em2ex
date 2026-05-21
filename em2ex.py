@@ -22,6 +22,8 @@ def get_parser():
     parser.add_argument('-u', '--use-official-api', dest = 'use_official_api', action = 'store_true', help = 'Use exodus.py to write files')
     parser.add_argument('--flip', dest = 'flip_z', action = 'store_true', help = 'Flip the sign of the Z coordinates')
     parser.add_argument('--translate', nargs = 2, dest = 'translate', type = float, help = 'Translate the (x, y) coordinates by this amount')
+    parser.add_argument('--progress', dest = 'progress', default = 'auto', choices = ['auto', 'on', 'off'],
+        help = 'Progress bars for Eclipse conversion: auto (>100000 cells), on, or off')
     return parser
 
 def main():

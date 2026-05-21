@@ -5,6 +5,49 @@ from exodus_model.ExodusModel import ExodusModel
 from readers.reader_utils import *
 import os
 
+
+LARGE_GRID_PROGRESS_THRESHOLD = 100000
+
+
+class _ProgressBar(object):
+    '''Simple terminal progress bar for long-running conversion loops.'''
+
+    def __init__(self, total, label, enabled, width=32):
+        self.total = max(int(total), 1)
+        self.label = label
+        self.width = width
+        self.enabled = enabled
+        self.current = 0
+        self._last_percent = -1
+
+    def update(self, step=1):
+        if not self.enabled:
+            return
+
+        self.current += step
+        if self.current > self.total:
+            self.current = self.total
+
+        percent = int((100 * self.current) / self.total)
+        if percent == self._last_percent and self.current < self.total:
+            return
+
+        filled = int((self.width * self.current) / self.total)
+        bar = '#' * filled + '-' * (self.width - filled)
+        print('\r{}: [{}] {:3d}% ({}/{})'.format(self.label, bar, percent, self.current, self.total), end='', flush=True)
+
+        if self.current >= self.total:
+            print('')
+
+        self._last_percent = percent
+
+    def close(self):
+        if not self.enabled:
+            return
+        if self.current < self.total:
+            self.current = self.total
+            self.update(0)
+
 class EclipseData(object):
     '''Class containing data from an Eclipse file'''
 
@@ -172,6 +215,17 @@ def parseEclipse(f, args):
     nx = eclipse.nx
     ny = eclipse.ny
     nz = eclipse.nz
+    total_cells = nx * ny * nz
+    progress_mode = getattr(args, 'progress', 'auto')
+    if progress_mode == 'on':
+        show_progress = True
+    elif progress_mode == 'off':
+        show_progress = False
+    else:
+        show_progress = total_cells > LARGE_GRID_PROGRESS_THRESHOLD
+
+    if show_progress and progress_mode == 'auto':
+        print('Large Eclipse grid detected ({} cells). Enabling progress bars.'.format(total_cells))
 
     # Check the number of COORD entries parsed is correct (6 points per entry)
     if (nx+1)*(ny+1)*6 != len(list(eclipse.coord)):
@@ -231,11 +285,12 @@ def parseEclipse(f, args):
     num_active_elements = np.count_nonzero(active_elements)
 
     # Generate the connection data by numbering all unique nodes in the mesh
-    elemNodes = numberNodesInElems(elemcornz, active_elements)
+    elemNodes = numberNodesInElems(elemcornz, active_elements, show_progress)
 
     # Construct the nodeIds for all corners in all elements
     nodeIds = np.zeros((2*nz, 2*ny,2*nx))
 
+    node_ids_progress = _ProgressBar(total_cells, 'Building node ID map', show_progress)
     for k in range(0, nz):
         for j in range(0, ny):
             for i in range(0, nx):
@@ -248,6 +303,8 @@ def parseEclipse(f, args):
                     nodeIds[2*k + 1, 2*j, 2*i + 1] = elemNodes[k, j, i, 5]
                     nodeIds[2*k + 1, 2*j + 1, 2*i] = elemNodes[k, j, i, 7]
                     nodeIds[2*k + 1, 2*j + 1, 2*i + 1] = elemNodes[k, j, i, 6]
+                node_ids_progress.update()
+    node_ids_progress.close()
 
     # The number of active nodes is
     num_active_nodes = np.max(nodeIds).astype(int)
@@ -265,7 +322,9 @@ def parseEclipse(f, args):
     # Give each element an ID (from 1 to num_active_elements)
     elemIds = np.zeros((nz, ny, nx), dtype=int)
     elemnum = 1
-    for blkid in np.unique(blocks):
+    block_ids = np.unique(blocks)
+    elem_ids_progress = _ProgressBar(total_cells * len(block_ids), 'Assigning element IDs', show_progress)
+    for blkid in block_ids:
         for k in range(0,nz):
             for j in range(0,ny):
                 for i in range(0,nx):
@@ -274,6 +333,8 @@ def parseEclipse(f, args):
                         if blocks[k, j, i] == blkid:
                             elemIds[k,j,i] = elemnum
                             elemnum+=1
+                    elem_ids_progress.update()
+    elem_ids_progress.close()
 
     # Order the coordinates according to the node numbering
     elemNodes = elemNodes.reshape(nz*ny*nx, 8)
@@ -379,7 +440,7 @@ def elemCornToCoord(elemcorns, elemNodes):
 
     return coords
 
-def numberNodesInElems(elemcornz, active_elements):
+def numberNodesInElems(elemcornz, active_elements, show_progress=False):
     ''' Number all unique nodes in grid including fault check'''
 
     # Backward-neighbor lookup table per corner index.
@@ -402,11 +463,13 @@ def numberNodesInElems(elemcornz, active_elements):
     elemNodes = np.zeros((nz, ny, nx, 8), dtype=int)
 
     nodenum = 1
+    progress = _ProgressBar(nz * ny * nx, 'Numbering unique nodes', show_progress)
 
     for k in range(nz):
         for j in range(ny):
             for i in range(nx):
                 if not active_elements[k, j, i]:
+                    progress.update()
                     continue
 
                 for corner, neighbors in enumerate(CORNER_NEIGHBORS):
@@ -420,6 +483,10 @@ def numberNodesInElems(elemcornz, active_elements):
                         elemNodes[k, j, i, corner] = nodenum
                         _backfill_inactive_neighbor(elemNodes, elemcornz, k, j, i, corner, neighbors, nodenum)
                         nodenum += 1
+
+                progress.update()
+
+    progress.close()
 
     return elemNodes
 
