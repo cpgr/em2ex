@@ -1,6 +1,6 @@
 # One-step conversion from reservoir Earth models to Exodus II format
 
-[![Build Status](https://travis-ci.com/cpgr/em2ex.svg?branch=master)](https://travis-ci.com/cpgr/em2ex)
+[![Build Status](https://github.com/cpgr/em2ex/actions/workflows/em2ex.yml/badge.svg)](https://github.com/cpgr/em2ex/actions/workflows/em2ex.yml)
 
 `em2ex` is a python program that converts a reservoir model to an Exodus II file that can then be used in
 a simulation tool (such as [MOOSE](http://www.mooseframework.org)) or viewed in a visualisation tool (such as [Paraview](https://www.paraview.org)).
