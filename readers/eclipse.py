@@ -382,112 +382,69 @@ def elemCornToCoord(elemcorns, elemNodes):
 def numberNodesInElems(elemcornz, active_elements):
     ''' Number all unique nodes in grid including fault check'''
 
+    # Backward-neighbor lookup table per corner index.
+    # Each entry is a list of (dk, dj, di, neighbor_corner) tuples describing
+    # which previously-visited element corners may share this node. Neighbors
+    # are checked in priority order; the first match wins.
+    CORNER_NEIGHBORS = [
+        [(-1, 0, 0, 4), (0, -1, 0, 3), (0, 0, -1, 1)],  # corner 0
+        [(-1, 0, 0, 5), (0, -1, 0, 2)],                 # corner 1
+        [(-1, 0, 0, 6)],                                # corner 2
+        [(-1, 0, 0, 7), (0, 0, -1, 2)],                 # corner 3
+        [(0, -1, 0, 7), (0, 0, -1, 5)],                 # corner 4
+        [(0, -1, 0, 6)],                                # corner 5
+        [],                                             # corner 6 — always new
+        [(0, 0, -1, 6)],                                # corner 7
+    ]
+
     nz, ny, nx = active_elements.shape
     elemcornz = elemcornz.reshape(nz, ny, nx, 8)
     elemNodes = np.zeros((nz, ny, nx, 8), dtype=int)
 
     nodenum = 1
 
-    # The following iterates over all elements, and checks if all corner nodes are unique
-    # or if they coincide with any previously visited elements. Only nodes that
-    # haven't been seen before are numbered. Importantly, after numbering a node any
-    # coincident nodes in inactive elements are also renumbered.
+    for k in range(nz):
+        for j in range(ny):
+            for i in range(nx):
+                if not active_elements[k, j, i]:
+                    continue
 
-    for k in range(0, nz):
-        for j in range(0, ny):
-            for i in range(0, nx):
-                if active_elements[k, j, i]:
-                    # Node 1
-                    if k > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k - 1, j, i, 4]) and elemNodes[k - 1, j, i, 4] != 0:
-                        elemNodes[k, j, i, 0] = elemNodes[k - 1, j, i, 4]
-                    elif j > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j - 1, i, 3]) and elemNodes[k, j - 1, i, 3] != 0:
-                        elemNodes[k, j, i, 0] = elemNodes[k, j - 1, i, 3]
-                    elif i > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j, i - 1, 1]) and elemNodes[k, j, i - 1, 1] != 0:
-                        elemNodes[k, j, i, 0] = elemNodes[k, j, i - 1, 1]
+                for corner, neighbors in enumerate(CORNER_NEIGHBORS):
+                    # Try to reuse a node from a previously-visited neighbor
+                    existing = _find_neighbor_node(elemNodes, elemcornz, k, j, i, corner, neighbors)
+                    if existing:
+                        elemNodes[k, j, i, corner] = existing
                     else:
-                        # Add a new node number
-                        elemNodes[k, j, i, 0] = nodenum; nodenum +=1;
-                        # Also check backwards to duplicate node if previous cell was inactive
-                        if k > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k - 1, j, i, 4]) and elemNodes[k - 1, j, i, 4] == 0:
-                            elemNodes[k - 1, j, i, 4] = elemNodes[k, j, i, 0]
-                        elif j > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j - 1, i, 3]) and elemNodes[k, j - 1, i, 3] == 0:
-                            elemNodes[k, j - 1, i, 3] = elemNodes[k, j, i, 0]
-                        elif i > 0 and np.isclose(elemcornz[k, j, i, 0], elemcornz[k, j, i - 1, 1]) and elemNodes[k, j, i - 1, 1] == 0:
-                            elemNodes[k, j, i - 1, 1] = elemNodes[k, j, i, 0]
-
-                    # Node 2
-                    if k > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k - 1, j, i, 5]) and elemNodes[k - 1, j, i, 5] != 0:
-                        elemNodes[k, j, i, 1] = elemNodes[k - 1, j, i, 5]
-                    elif j > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k, j - 1, i, 2]) and elemNodes[k, j - 1, i, 2] != 0:
-                        elemNodes[k, j, i, 1] = elemNodes[k, j - 1, i, 2]
-                    else:
-                        # Add a new node number
-                        elemNodes[k, j, i, 1] = nodenum; nodenum +=1;
-                        # Also check backwards to duplicate node if previous cell was inactive
-                        if k > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k - 1, j, i, 5]) and elemNodes[k - 1, j, i, 5] == 0:
-                            elemNodes[k - 1, j, i, 5] = elemNodes[k, j, i, 1]
-                        elif j > 0 and np.isclose(elemcornz[k, j, i, 1], elemcornz[k, j - 1, i, 2]) and elemNodes[k, j - 1, i, 2] == 0:
-                            elemNodes[k, j - 1, i, 2] = elemNodes[k, j, i, 1]
-
-                    # Node 3
-                    if k > 0 and np.isclose(elemcornz[k, j, i, 2], elemcornz[k - 1, j, i, 6]) and elemNodes[k - 1, j, i, 6] != 0:
-                        elemNodes[k, j, i, 2] = elemNodes[k - 1, j, i, 6]
-                    else:
-                        # Add a new node number
-                        elemNodes[k, j, i, 2] = nodenum; nodenum +=1;
-                        # Also check backwards to duplicate node if previous cell was inactive
-                        if k > 0 and np.isclose(elemcornz[k, j, i, 2], elemcornz[k - 1, j, i, 6]) and elemNodes[k - 1, j, i, 6] == 0:
-                            elemNodes[k - 1, j, i, 6] = elemNodes[k, j, i, 2]
-
-                    # Node 4
-                    if k > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k - 1, j, i, 7]) and elemNodes[k - 1, j, i, 7] != 0:
-                        elemNodes[k, j, i, 3] = elemNodes[k - 1, j, i, 7]
-                    elif i > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k, j, i - 1, 2]) and elemNodes[k, j, i - 1, 2] != 0 :
-                        elemNodes[k, j, i, 3] = elemNodes[k, j, i - 1, 2]
-                    else:
-                        # Add a new node number
-                        elemNodes[k, j, i, 3] = nodenum; nodenum +=1;
-                        # Also check backwards to duplicate node if previous cell was inactive
-                        if k > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k - 1, j, i, 7]) and elemNodes[k - 1, j, i, 7] == 0:
-                            elemNodes[k - 1, j, i, 7] = elemNodes[k, j, i, 3]
-                        elif i > 0 and np.isclose(elemcornz[k, j, i, 3], elemcornz[k, j, i - 1, 2]) and elemNodes[k, j, i - 1, 2] == 0 :
-                            elemNodes[k, j, i - 1, 2] = elemNodes[k, j, i, 3]
-
-                    # Node 5
-                    if j > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j - 1, i, 7]) and elemNodes[k, j - 1, i, 7] != 0:
-                        elemNodes[k, j, i, 4] = elemNodes[k, j - 1, i, 7]
-                    elif i > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j, i - 1, 5]) and elemNodes[k, j, i - 1, 5] != 0:
-                        elemNodes[k, j, i, 4] = elemNodes[k, j, i - 1, 5]
-                    else:
-                        # Add a new node number
-                        elemNodes[k, j, i, 4] = nodenum; nodenum +=1;
-                        # Also check backwards to duplicate node if previous cell was inactive
-                        if j > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j - 1, i, 7]) and elemNodes[k, j - 1, i, 7] == 0:
-                            elemNodes[k, j - 1, i, 7] = elemNodes[k, j, i, 4]
-                        elif i > 0 and np.isclose(elemcornz[k, j, i, 4], elemcornz[k, j, i - 1, 5]) and elemNodes[k, j, i - 1, 5] == 0:
-                            elemNodes[k, j, i - 1, 5] = elemNodes[k, j, i, 4]
-
-                    # Node 6
-                    if j > 0 and np.isclose(elemcornz[k, j, i, 5], elemcornz[k, j - 1, i, 6]) and elemNodes[k, j - 1, i, 6] != 0:
-                        elemNodes[k, j, i, 5] = elemNodes[k, j - 1, i, 6]
-                    else:
-                        # Add a new node number
-                        elemNodes[k, j, i, 5] = nodenum; nodenum +=1;
-                        # Also check backwards to duplicate node if previous cell was inactive
-                        if j > 0 and np.isclose(elemcornz[k, j, i, 5], elemcornz[k, j - 1, i, 6]) and elemNodes[k, j - 1, i, 6] == 0:
-                            elemNodes[k, j - 1, i, 6] = elemNodes[k, j, i, 5]
-
-                    # Node 7
-                    elemNodes[k, j, i, 6] = nodenum; nodenum +=1;
-
-                    # Node 8
-                    if i > 0 and np.isclose(elemcornz[k, j, i, 7], elemcornz[k, j, i - 1, 6]) and elemNodes[k, j, i - 1, 6] != 0:
-                        elemNodes[k, j, i, 7] = elemNodes[k, j, i - 1, 6]
-                    else:
-                        # Add a new node number
-                        elemNodes[k, j, i, 7] = nodenum; nodenum +=1;
-                        # Also check backwards to duplicate node if previous cell was inactive
-                        if i > 0 and np.isclose(elemcornz[k, j, i, 7], elemcornz[k, j, i - 1, 6]) and elemNodes[k, j, i - 1, 6] == 0:
-                            elemNodes[k, j, i - 1, 6] = elemNodes[k, j, i, 7]
+                        # Assign a new node and back-fill the first matching
+                        # inactive neighbor so it shares this node
+                        elemNodes[k, j, i, corner] = nodenum
+                        _backfill_inactive_neighbor(elemNodes, elemcornz, k, j, i, corner, neighbors, nodenum)
+                        nodenum += 1
 
     return elemNodes
+
+
+def _find_neighbor_node(elemNodes, elemcornz, k, j, i, corner, neighbors):
+    ''' Return the node number of the first active backward neighbor whose z
+    coordinate coincides with (k, j, i, corner), or None if no match. '''
+    for dk, dj, di, nc in neighbors:
+        nk, nj, ni = k + dk, j + dj, i + di
+        if nk < 0 or nj < 0 or ni < 0:
+            continue
+        if (elemNodes[nk, nj, ni, nc] != 0
+                and np.isclose(elemcornz[k, j, i, corner], elemcornz[nk, nj, ni, nc])):
+            return elemNodes[nk, nj, ni, nc]
+    return None
+
+
+def _backfill_inactive_neighbor(elemNodes, elemcornz, k, j, i, corner, neighbors, nodenum):
+    ''' Assign nodenum to the first inactive backward neighbor whose z coordinate
+    coincides with (k, j, i, corner), so it shares the newly-created node. '''
+    for dk, dj, di, nc in neighbors:
+        nk, nj, ni = k + dk, j + dj, i + di
+        if nk < 0 or nj < 0 or ni < 0:
+            continue
+        if (elemNodes[nk, nj, ni, nc] == 0
+                and np.isclose(elemcornz[k, j, i, corner], elemcornz[nk, nj, ni, nc])):
+            elemNodes[nk, nj, ni, nc] = nodenum
+            return
