@@ -25,6 +25,8 @@ def get_parser():
     parser.add_argument('--progress', dest = 'progress', default = 'auto', choices = ['auto', 'on', 'off'],
         help = 'Progress bars for Eclipse conversion: auto (>100000 cells), on, or off')
     parser.add_argument('--mapaxes', dest = 'use_mapaxes', action = 'store_true', help = 'Use the MAPAXES coordinates for an Eclipse file')
+    parser.add_argument('--pinch', default = True, dest = 'no_pinch', action = 'store_true', help = 'Remove pinched elements')
+    parser.add_argument('--pinch-tol', default = 1e-3, dest = 'pinch_tol', type = float, help = 'Tolerance for coincident corners when removing pinched elements (default: 1e-3)')
     return parser
 
 def main():
