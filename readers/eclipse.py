@@ -295,8 +295,9 @@ def parseEclipse(f, args):
 
     # Translate the coordinates if the translate commandline option is specified
     if args.translate:
-        coord[:,:,0] = coord[:,:,0] + args.translate[0]
-        coord[:,:,1] = coord[:,:,1] + args.translate[1]
+        for xi, yi in [(0, 1), (3, 4)]:
+            coord[:,:,xi] = coord[:,:,xi] + args.translate[0]
+            coord[:,:,yi] = coord[:,:,yi] + args.translate[1]
 
     # Transform the coordinates to MAPAXES coordinates if use_mapaxes is specified and
     # MAPAXES exists and GRIDUNIT exists and GRIDUNIT = GRID
