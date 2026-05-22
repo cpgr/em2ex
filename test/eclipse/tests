@@ -35,6 +35,12 @@ simple_cube_translated:
   cli_args: --translate 1 2
   gold: simple_cube_translated.e
 
+simple_cube_mapaxes:
+  filename: simple_cube_mapaxes.grdecl
+  type: exodiff
+  cli_args: --mapaxes
+  gold: simple_cube_mapaxes.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception

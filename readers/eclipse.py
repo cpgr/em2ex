@@ -323,8 +323,8 @@ def parseEclipse(f, args):
 
             # Transform top and bottom pillar x,y: world = origin + local_x*xhat + local_y*yhat
             for xi, yi in [(0, 1), (3, 4)]:
-                xdata = np.asarray(coord[:,:,xi])
-                ydata = np.asarray(coord[:,:,yi])
+                xdata = coord[:,:,xi].copy()
+                ydata = coord[:,:,yi].copy()
                 coord[:,:,xi] = xorigin + xdata * xvec[0] + ydata * yvec[0]
                 coord[:,:,yi] = yorigin + xdata * xvec[1] + ydata * yvec[1]
 
