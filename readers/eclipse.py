@@ -293,6 +293,24 @@ def parseEclipse(f, args):
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
     coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
 
+    # The exodus node numbering relies on a right-hand coordinate system, with
+    # x and y increasing. However, eclipse can output a grid with a left-hand
+    # coordinate system, with either (or both) x and y decreasing (ie, pointing in
+    # the negative direction). This will lead to a negative element Jacobian when an
+    # exodus mesh is created. Therefore, we flip the decreasing coordinate, create
+    # the grid, then flip the coordinate again.
+
+    flip_x, flip_y = False, False
+    if (coord[:,:,0][0,-1] - coord[:,:,0][0,0] < 0):
+        # x coordinates are in decreasing order — reverse all pillar data along column axis
+        coord = coord[:, ::-1, :]
+        flip_x = True
+
+    if (coord[:,:,1][-1,0] - coord[:,:,1][0,0] < 0):
+        # y coordinates are in decreasing order — reverse all pillar data along row axis
+        coord = coord[::-1, :, :]
+        flip_y = True
+
     # Translate the coordinates if the translate commandline option is specified
     if args.translate:
         for xi, yi in [(0, 1), (3, 4)]:
@@ -422,6 +440,16 @@ def parseEclipse(f, args):
     # Reorder elemNodes for correct ordering if flipped
     if args.flip_z:
         elemNodes = elemNodes[:, [4, 5, 6, 7, 0, 1, 2, 3]]
+
+    # If an axis has been flipped, also flip the elemProps
+    for prop in eclipse.elemProps:
+        if flip_x:
+            tmp_prop = eclipse.elemProps[prop].reshape(nz, ny, nx)
+            eclipse.elemProps[prop] = np.flip(tmp_prop, 2).flatten()
+
+        if flip_y:
+            tmp_prop = eclipse.elemProps[prop].reshape(nz, ny, nx)
+            eclipse.elemProps[prop] = np.flip(tmp_prop, 1).flatten()
 
     # Remove elemental properties in inactive elements
     for prop in eclipse.elemProps:
