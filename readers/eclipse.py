@@ -302,13 +302,13 @@ def parseEclipse(f, args):
 
     flip_x, flip_y = False, False
     if (coord[:,:,0][0,-1] - coord[:,:,0][0,0] < 0):
-        # x cordinates are in decreasing order
-        coord[:,:,0] = np.flip(coord[:,:,0])
+        # x coordinates are in decreasing order — reverse all pillar data along column axis
+        coord = coord[:, ::-1, :]
         flip_x = True
 
     if (coord[:,:,1][-1,0] - coord[:,:,1][0,0] < 0):
-        # y cordinates are in decreasing order
-        coord[:,:,1] = np.flip(coord[:,:,1])
+        # y coordinates are in decreasing order — reverse all pillar data along row axis
+        coord = coord[::-1, :, :]
         flip_y = True
 
     # Translate the coordinates if the translate commandline option is specified
