@@ -293,18 +293,13 @@ def parseEclipse(f, args):
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
     coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
 
-<<<<<<< HEAD
     # Translate the coordinates if the translate commandline option is specified
     if args.translate:
         coord[:,:,0] = coord[:,:,0] + args.translate[0]
         coord[:,:,1] = coord[:,:,1] + args.translate[1]
 
     # Transform the coordinates to MAPAXES coordinates if use_mapaxes is specified and
-    # a GRIDUNIT exists and GRIDUNIT = GRID
-=======
-     # Transform the coordinates to MAPAXES coordinates if use_mapaxes is specified and
-     # MAPAXES exists and GRIDUNIT exists and GRIDUNIT = GRID
->>>>>>> b4bf98f (Fix logic error for using mapaxes)
+    # MAPAXES exists and GRIDUNIT exists and GRIDUNIT = GRID
     if args.use_mapaxes:
 
         if not eclipse.mapaxes:
@@ -317,31 +312,20 @@ def parseEclipse(f, args):
                 transform_coords = True
 
         if transform_coords:
-            # Origin and translation vectors from MAPAXES
+            # Origin and axis unit vectors from MAPAXES
             xorigin, yorigin = eclipse.mapaxes[2], eclipse.mapaxes[3]
             xvec = np.array([eclipse.mapaxes[4] - xorigin, eclipse.mapaxes[5] - yorigin])
             yvec = np.array([eclipse.mapaxes[0] - xorigin, eclipse.mapaxes[1] - yorigin])
 
-            # Normalise the translation vectors
             xvec = xvec / np.sqrt(xvec[0]**2 + xvec[1]**2)
             yvec = yvec / np.sqrt(yvec[0]**2 + yvec[1]**2)
 
-            # The x and y coordinates from COORD
-            xdata = np.asarray(coord[:,:,0])
-            ydata = np.asarray(coord[:,:,1])
-
-            # det = 1.0 / (xvec[0] * yvec[1] - xvec[1] * yvec[0])
-
-            # newx = (xdata * yvec[0] - ydata * yvec[1]) * det
-            # newy = (-xdata * xvec[0] + ydata * xvec[1]) * det
-
-            # newx = xorigin + xdata * xvec[0] + ydata * xvec[1]
-            # newy = yorigin + xdata * yvec[0] + ydata * yvec[1]
-
-            newx = xvec[0] * (-xdata - xorigin) + xvec[1] * (ydata - yorigin)
-            newy = yvec[0] * (-xdata - xorigin) + yvec[1] * (ydata - yorigin)
-
-            coord[:,:,0], coord[:,:,1] = newx, newy
+            # Transform top and bottom pillar x,y: world = origin + local_x*xhat + local_y*yhat
+            for xi, yi in [(0, 1), (3, 4)]:
+                xdata = np.asarray(coord[:,:,xi])
+                ydata = np.asarray(coord[:,:,yi])
+                coord[:,:,xi] = xorigin + xdata * xvec[0] + ydata * yvec[0]
+                coord[:,:,yi] = yorigin + xdata * xvec[1] + ydata * yvec[1]
 
     # Transform coord data to zcorn format (so that there is an x and y coordinate
     # for each node in the grid)
