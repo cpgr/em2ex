@@ -21,6 +21,15 @@ def _positive_int(s):
             "expected a positive integer (>= 1), got {}".format(v))
     return v
 
+def _eclipse_keyword(s):
+    ''' argparse type for an Eclipse property keyword. Normalises to uppercase
+    and rejects anything that isn't a short alphanumeric token. '''
+    up = s.upper()
+    if not up or not up.isalnum() or len(up) > 8:
+        raise argparse.ArgumentTypeError(
+            "expected a short alphanumeric Eclipse keyword (<= 8 chars), got {!r}".format(s))
+    return up
+
 def get_parser():
     ''' Read commandline options and filename '''
 
@@ -50,6 +59,9 @@ def get_parser():
     parser.add_argument('--extract-k', nargs = 2, dest = 'extract_k', type = _positive_int,
         metavar = ('K_LO', 'K_HI'),
         help = 'Extract cells K_LO..K_HI along the z-axis (1-based inclusive).')
+    parser.add_argument('--extra-keywords', nargs = '+', dest = 'extra_keywords',
+        type = _eclipse_keyword, metavar = 'KEY',
+        help = 'Additional per-cell property keywords to read from the grdecl file (e.g. PVTNUM EQLNUM FIPNUM). Each must be a per-cell scalar of length NX*NY*NZ. Normalised to uppercase. The reader recognises ACTNUM, SATNUM, PORO, PERMX, PERMY, PERMZ, NTG, HEATCR and THCONR by default.')
     return parser
 
 def main():

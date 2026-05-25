@@ -125,11 +125,20 @@ def processData(line):
             data.extend(expanded)
     return data
 
-def readEclipse(f, eclipse):
-    ''' Read an Eclipse grdecl file and store the data in an Eclipse object '''
+# Per-cell scalar property keywords the reader recognises out of the box.
+# Any additional keywords (e.g. PVTNUM, EQLNUM, FIPNUM) can be passed by the
+# caller via the `extra_keywords` argument to readEclipse (wired to the CLI
+# flag --extra-keywords).
+DEFAULT_KEYWORDS = ('ACTNUM', 'SATNUM', 'PORO',
+                    'PERMX', 'PERMY', 'PERMZ',
+                    'NTG', 'HEATCR', 'THCONR')
 
-    # Keywords that may be read in the Eclipse file
-    ECLIPSE_KEYWORDS =  ['ACTNUM', 'SATNUM', 'PORO', 'PERMX', 'PERMY', 'PERMZ']
+def readEclipse(f, eclipse, extra_keywords=()):
+    ''' Read an Eclipse grdecl file and store the data in an Eclipse object.
+    `extra_keywords` is an iterable of additional uppercase keyword names to
+    read as per-cell properties on top of DEFAULT_KEYWORDS. '''
+
+    keywords = set(DEFAULT_KEYWORDS) | {k.upper() for k in extra_keywords}
 
     # Open the .grdecl file for reading
     with open(f, 'r') as file:
@@ -158,17 +167,16 @@ def readEclipse(f, eclipse):
             elif line.startswith('INCLUDE'):
                 include_file = next(file).split()[0]
                 filepath = os.path.split(f)[0]
-                readEclipse(os.path.join(filepath, include_file), eclipse)
+                readEclipse(os.path.join(filepath, include_file), eclipse,
+                            extra_keywords=extra_keywords)
 
-            elif line.split()[0] in ECLIPSE_KEYWORDS:
-                # Read in all properties known to the reader (in ECLIPSE_KEYWORDS)
+            elif line.split()[0] in keywords:
+                # Read in all per-cell property arrays whose keyword is recognised
                 prop = line.split()[0]
-                proplistname = prop.lower() + 'list'
-                proplistname = np.asarray(readBlock(file))
-                eclipse.elemProps[prop] = proplistname
+                eclipse.elemProps[prop] = np.asarray(readBlock(file))
 
             else:
-                # Skip all unkown sections
+                # Skip all unknown sections
                 continue
 
     return
@@ -180,8 +188,9 @@ def parseEclipse(f, args):
     # Eclipse data object
     eclipse = EclipseData()
 
-    # Read the Eclipse grdecl file
-    readEclipse(f, eclipse)
+    # Read the Eclipse grdecl file (with any user-supplied extra property keywords)
+    extra_keywords = getattr(args, 'extra_keywords', None) or ()
+    readEclipse(f, eclipse, extra_keywords=extra_keywords)
 
     # Check that required SPECGRID, COORD and ZCORN data has been supplied
     if not eclipse.specgrid:
@@ -194,6 +203,14 @@ def parseEclipse(f, args):
 
     if not eclipse.zcorn:
         print("No ZCORN data found in ", f)
+        exit()
+
+    # Surface typos: any --extra-keywords value the file (or its INCLUDEs)
+    # never provided. Reported all at once so the user fixes them in one go.
+    missing = [k for k in extra_keywords if k not in eclipse.elemProps]
+    if missing:
+        print("--extra-keywords requested {} but the keyword was not found in {}".format(
+            ', '.join(missing), f))
         exit()
 
     # Check the optional MAPAXES data

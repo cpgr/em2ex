@@ -74,6 +74,17 @@ simple_cube_extract:
   cli_args: --extract-i 2 3 --extract-j 1 2 --extract-k 1 1
   gold: simple_cube_extract.e
 
+simple_cube_keywords:
+  filename: simple_cube_keywords.grdecl
+  type: exodiff
+  gold: simple_cube_keywords.e
+
+simple_cube_keywords_extra:
+  filename: simple_cube_keywords.grdecl
+  type: exodiff
+  cli_args: --extra-keywords MYTHING --
+  gold: simple_cube_keywords_extra.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception
@@ -151,3 +162,15 @@ extract_i_non_integer:
   type: exception
   cli_args: --extract-i 1.5 2
   expected_error: expected a positive integer
+
+extra_keywords_bad:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --extra-keywords FOO-BAR --
+  expected_error: expected a short alphanumeric Eclipse keyword
+
+extra_keywords_typo:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --extra-keywords PVTNUMM --
+  expected_error: --extra-keywords requested PVTNUMM but the keyword was not found

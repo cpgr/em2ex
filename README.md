@@ -93,7 +93,7 @@ usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
                 [--translate TRANSLATE TRANSLATE] [--mapaxes] [--pinch]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
                 [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
-                [--extract-k K_LO K_HI]
+                [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
                 filename
 
 Converts earth model to Exodus II format
@@ -134,6 +134,13 @@ options:
   --extract-k K_LO K_HI
                         Extract cells K_LO..K_HI along the z-axis (1-based
                         inclusive).
+  --extra-keywords KEY [KEY ...]
+                        Additional per-cell property keywords to read from the
+                        grdecl file (e.g. PVTNUM EQLNUM FIPNUM). Each must be
+                        a per-cell scalar of length NX*NY*NZ. Normalised to
+                        uppercase. The reader recognises ACTNUM, SATNUM, PORO,
+                        PERMX, PERMY, PERMZ, NTG, HEATCR and THCONR by
+                        default.
 ```
 
 ### Lateral refinement (Eclipse only)
@@ -170,6 +177,32 @@ Indices refer to cell positions **as they appear in the file** — same numberin
 - For a left-handed coordinate file, the extracted region is still the cells at file indices `i=I_LO..I_HI` (etc.), exactly as they're listed in `PORO`. In the output mesh, those cells then get re-numbered through the auto-flip to the canonical right-handed system, so their i (and/or j) indices in the produced Exodus mesh may run in the opposite direction from the file's. The geometry and properties are preserved; only the index sense changes.
 
 If any range is out of bounds for the file's `SPECGRID` size, or if `LO > HI`, the conversion is rejected up front with the actual dimensions cited.
+
+### Per-cell properties (Eclipse only)
+
+`em2ex` recognises the following per-cell scalar property keywords out of the box and emits each as an elemental variable on the resulting Exodus mesh:
+
+- `ACTNUM`, `SATNUM`
+- `PORO`, `PERMX`, `PERMY`, `PERMZ`
+- `NTG` (net-to-gross)
+- `HEATCR` (volumetric heat capacity), `THCONR` (rock thermal conductivity)
+
+The Eclipse keyword catalogue is much larger than this. If the model uses keywords the reader doesn't know about (e.g. `PVTNUM`, `EQLNUM`, `FIPNUM`, custom in-house names), pass them with `--extra-keywords`:
+
+```bash
+./em2ex.py --extra-keywords PVTNUM EQLNUM FIPNUM model.grdecl
+```
+
+A few practical notes:
+
+- Keywords are normalised to uppercase, so `--extra-keywords ntg fipnum` and `--extra-keywords NTG FIPNUM` are equivalent.
+- Each named keyword must be a per-cell scalar block of `NX*NY*NZ` entries terminated by `/`. The existing array-size check applies to extras the same as to defaults — a mismatched block size is rejected with the offending keyword named.
+- If you ask for a keyword that doesn't appear in the file (or any of its `INCLUDE`d files), the conversion fails up front with the offending keyword named — typos in `--extra-keywords` are not silently ignored.
+- Because `--extra-keywords` takes a variable number of values (`nargs='+'`), put the input filename **before** it, or separate them with `--`. Either of these works:
+  ```bash
+  ./em2ex.py model.grdecl --extra-keywords PVTNUM EQLNUM
+  ./em2ex.py --extra-keywords PVTNUM EQLNUM -- model.grdecl
+  ```
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.
