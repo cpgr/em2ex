@@ -68,6 +68,12 @@ simple_cube_refine:
   cli_args: --refine-xy 2 3
   gold: simple_cube_refine.e
 
+simple_cube_extract:
+  filename: simple_cube_extract.grdecl
+  type: exodiff
+  cli_args: --extract-i 2 3 --extract-j 1 2 --extract-k 1 1
+  gold: simple_cube_extract.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception
@@ -102,22 +108,46 @@ refine_xy_zero:
   filename: simple_cube.grdecl
   type: exception
   cli_args: --refine-xy 0 2
-  expected_error: refinement factor must be >= 1
+  expected_error: expected a positive integer (>= 1)
 
 refine_xy_negative:
   filename: simple_cube.grdecl
   type: exception
   cli_args: --refine-xy 2 -3
-  expected_error: refinement factor must be >= 1
+  expected_error: expected a positive integer (>= 1)
 
 refine_xy_non_integer:
   filename: simple_cube.grdecl
   type: exception
   cli_args: --refine-xy 1.5 2
-  expected_error: refinement factor must be a positive integer
+  expected_error: expected a positive integer
 
 refine_xy_garbage:
   filename: simple_cube.grdecl
   type: exception
   cli_args: --refine-xy foo 2
-  expected_error: refinement factor must be a positive integer
+  expected_error: expected a positive integer
+
+extract_i_out_of_bounds:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --extract-i 1 99
+  expected_error: --extract-i range 1..99 is out of bounds for the x-axis (NX=3 in SPECGRID)
+
+extract_j_inverted:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --extract-j 3 1
+  expected_error: --extract-j requires LO <= HI, got 3 > 1
+
+extract_k_zero:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --extract-k 0 2
+  expected_error: expected a positive integer (>= 1)
+
+extract_i_non_integer:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --extract-i 1.5 2
+  expected_error: expected a positive integer

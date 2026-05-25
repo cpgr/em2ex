@@ -9,15 +9,16 @@ import argparse
 import os
 
 def _positive_int(s):
-    ''' argparse type for strictly positive integer refinement factors. '''
+    ''' argparse type for strictly positive integers (refinement factors and
+    extract indices). '''
     try:
         v = int(s)
     except (TypeError, ValueError):
         raise argparse.ArgumentTypeError(
-            "refinement factor must be a positive integer, got {!r}".format(s))
+            "expected a positive integer, got {!r}".format(s))
     if v < 1:
         raise argparse.ArgumentTypeError(
-            "refinement factor must be >= 1, got {}".format(v))
+            "expected a positive integer (>= 1), got {}".format(v))
     return v
 
 def get_parser():
@@ -40,6 +41,15 @@ def get_parser():
     parser.add_argument('--refine-xy', nargs = 2, dest = 'refine_xy', type = _positive_int,
         metavar = ('RX', 'RY'),
         help = 'Refine the grid laterally by integer factors RX in x and RY in y (vertical resolution unchanged). Each child cell inherits its parent\'s element properties.')
+    parser.add_argument('--extract-i', nargs = 2, dest = 'extract_i', type = _positive_int,
+        metavar = ('I_LO', 'I_HI'),
+        help = 'Extract cells I_LO..I_HI along the x-axis (1-based inclusive, Eclipse-style). Cells are taken in file order, before any coordinate-system normalisation; runs before --refine-xy if both are given.')
+    parser.add_argument('--extract-j', nargs = 2, dest = 'extract_j', type = _positive_int,
+        metavar = ('J_LO', 'J_HI'),
+        help = 'Extract cells J_LO..J_HI along the y-axis (1-based inclusive).')
+    parser.add_argument('--extract-k', nargs = 2, dest = 'extract_k', type = _positive_int,
+        metavar = ('K_LO', 'K_HI'),
+        help = 'Extract cells K_LO..K_HI along the z-axis (1-based inclusive).')
     return parser
 
 def main():
