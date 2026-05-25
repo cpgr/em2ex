@@ -1,0 +1,46 @@
+-- 2x2x1 grid covering [0, 2] x [0, 2] in (x, y) with a non-planar top
+-- surface z_top(x, y) = 0.1 * x * y. The xy product term makes each parent
+-- cell's top face genuinely bilinear (not affine), so refinement must
+-- actually evaluate the bilinear at interior sub-corner positions for the
+-- output to match simple_cube_refine_ref.grdecl. The bottom is flat at z=1.
+
+SPECGRID
+2 2 1 1 F /
+
+GRIDUNIT
+  METRES /
+
+COORD
+ 0.000 0.000 0.000 0.000 0.000 1.000
+ 1.000 0.000 0.000 1.000 0.000 1.000
+ 2.000 0.000 0.000 2.000 0.000 1.000
+ 0.000 1.000 0.000 0.000 1.000 1.000
+ 1.000 1.000 0.000 1.000 1.000 1.000
+ 2.000 1.000 0.000 2.000 1.000 1.000
+ 0.000 2.000 0.000 0.000 2.000 1.000
+ 1.000 2.000 0.000 1.000 2.000 1.000
+ 2.000 2.000 0.000 2.000 2.000 1.000
+/
+
+ZCORN
+0.0 0.0 0.0 0.0
+0.0 0.1 0.1 0.2
+0.0 0.1 0.1 0.2
+0.0 0.2 0.2 0.4
+1.0 1.0 1.0 1.0
+1.0 1.0 1.0 1.0
+1.0 1.0 1.0 1.0
+1.0 1.0 1.0 1.0
+/
+
+ACTNUM
+1 1 1 1
+/
+
+PORO
+0.1 0.2 0.3 0.4
+/
+
+SATNUM
+1 2 3 4
+/

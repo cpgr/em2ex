@@ -346,10 +346,6 @@ def parseEclipse(f, args):
                 coord[:,:,xi] = xorigin + xdata * xvec[0] + ydata * yvec[0]
                 coord[:,:,yi] = yorigin + xdata * xvec[1] + ydata * yvec[1]
 
-    # Transform coord data to zcorn format (so that there is an x and y coordinate
-    # for each node in the grid)
-    xcorn, ycorn = coordToCorn(coord, nz)
-
     # The ZCORN data varies by x, y and then z. Reshape it into an array where
     # the first index gives the layer, the second the y coordinates and the third
     # the x coordinates
@@ -358,6 +354,19 @@ def parseEclipse(f, args):
     # Flip the Z coordinates if specified
     if args.flip_z:
         zcorn = - zcorn
+
+    # Apply lateral (x, y) refinement if requested. Pillars are linearly
+    # interpolated; per-cell tops and bottoms are bilinearly interpolated within
+    # each parent (which preserves faults); element properties are inherited by
+    # all child cells of each parent.
+    if getattr(args, 'refine_xy', None):
+        rx, ry = args.refine_xy
+        coord, zcorn, eclipse.elemProps, nx, ny = refineLaterally(
+            coord, zcorn, eclipse.elemProps, nx, ny, nz, rx, ry)
+
+    # Transform coord data to zcorn format (so that there is an x and y coordinate
+    # for each node in the grid)
+    xcorn, ycorn = coordToCorn(coord, nz)
 
     # Now transform all of the coordinate arrays into element-ordered array, where
     # each row corresponds to a single element containing eight corners
@@ -637,3 +646,102 @@ def _backfill_inactive_neighbor(elemNodes, elemcornz, k, j, i, corner, neighbors
                 and np.isclose(elemcornz[k, j, i, corner], elemcornz[nk, nj, ni, nc])):
             elemNodes[nk, nj, ni, nc] = nodenum
             return
+
+
+def refineLaterally(coord, zcorn, elemProps, nx, ny, nz, rx, ry):
+    ''' Refine the grid laterally by integer factors (rx, ry) without refining
+    vertically. Pillars (and their endpoint x, y, z stored in coord) are linearly
+    interpolated. Per-cell top and bottom faces in zcorn are bilinearly
+    interpolated within each parent cell, which preserves faults (z jumps
+    between adjacent cells along a shared pillar). Element properties are tiled
+    so each child inherits its parent's value.
+
+    Inputs:
+        coord     : ndarray (ny+1, nx+1, 6)     pillar top/bottom (x, y, z)
+        zcorn     : ndarray (2*nz, 2*ny, 2*nx)  per-cell corner z values
+        elemProps : dict[name -> flat ndarray of length nx*ny*nz]
+        nx, ny, nz: int grid sizes
+        rx, ry    : int positive refinement factors
+
+    Returns:
+        (coord, zcorn, elemProps, nx*rx, ny*ry) with refined shapes.
+    '''
+    if rx == 1 and ry == 1:
+        return coord, zcorn, elemProps, nx, ny
+
+    # COORD: linear interpolation between pillars along j then i.
+    coord = _refine_axis(coord, ry, axis=0)
+    coord = _refine_axis(coord, rx, axis=1)
+
+    # ZCORN: bilinear within each parent cell. Per-cell corner arrays each of
+    # shape (nz, ny, nx); naming c<u><v><k> with u, v in {0, 1} for the (i, j)
+    # corner and k in {0, 1} for top/bottom.
+    c000 = zcorn[0::2, 0::2, 0::2]
+    c100 = zcorn[0::2, 0::2, 1::2]
+    c010 = zcorn[0::2, 1::2, 0::2]
+    c110 = zcorn[0::2, 1::2, 1::2]
+    c001 = zcorn[1::2, 0::2, 0::2]
+    c101 = zcorn[1::2, 0::2, 1::2]
+    c011 = zcorn[1::2, 1::2, 0::2]
+    c111 = zcorn[1::2, 1::2, 1::2]
+
+    # Parametric (u, v) at every sub-cell corner in zcorn order. Interior values
+    # appear twice because adjacent sub-cells own their own copy of a shared
+    # corner. For rx = 3: [0, 1/3, 1/3, 2/3, 2/3, 1].
+    u_seq = np.repeat(np.arange(rx + 1) / rx, 2)[1:-1]
+    v_seq = np.repeat(np.arange(ry + 1) / ry, 2)[1:-1]
+    u = u_seq.reshape(1, 1, 1, 1, 2 * rx)
+    v = v_seq.reshape(1, 1, 1, 2 * ry, 1)
+
+    def bilinear(z00, z10, z01, z11):
+        z00 = z00[..., None, None]
+        z10 = z10[..., None, None]
+        z01 = z01[..., None, None]
+        z11 = z11[..., None, None]
+        return ((1 - u) * (1 - v) * z00
+                +      u  * (1 - v) * z10
+                + (1 - u) *      v  * z01
+                +      u  *      v  * z11)
+
+    z_top = bilinear(c000, c100, c010, c110)
+    z_bot = bilinear(c001, c101, c011, c111)
+
+    # Collapse (ny, 2*ry) -> 2*ry*ny and (nx, 2*rx) -> 2*rx*nx by transposing
+    # so the parent axis sits adjacent to its sub-corner axis, then reshaping.
+    def collapse(z):
+        return z.transpose(0, 1, 3, 2, 4).reshape(nz, 2 * ry * ny, 2 * rx * nx)
+    z_top = collapse(z_top)
+    z_bot = collapse(z_bot)
+
+    zcorn_new = np.empty((2 * nz, 2 * ry * ny, 2 * rx * nx), dtype=zcorn.dtype)
+    zcorn_new[0::2] = z_top
+    zcorn_new[1::2] = z_bot
+
+    new_elemProps = {}
+    for name, vals in elemProps.items():
+        p = np.asarray(vals).reshape(nz, ny, nx)
+        p = np.repeat(np.repeat(p, ry, axis=1), rx, axis=2)
+        new_elemProps[name] = p.flatten()
+
+    return coord, zcorn_new, new_elemProps, nx * rx, ny * ry
+
+
+def _refine_axis(a, r, axis):
+    ''' Linearly interpolate `a` along `axis` so that n+1 nodes become r*n+1. '''
+    if r == 1:
+        return a
+    n = a.shape[axis] - 1
+    left  = np.take(a, np.arange(0, n),     axis=axis)
+    right = np.take(a, np.arange(1, n + 1), axis=axis)
+    left  = np.expand_dims(left,  axis + 1)
+    right = np.expand_dims(right, axis + 1)
+    s_shape = [1] * left.ndim
+    s_shape[axis + 1] = r
+    s = (np.arange(r) / r).reshape(s_shape)
+    blended = (1 - s) * left + s * right
+    new_shape = list(blended.shape)
+    new_shape[axis] = n * r
+    del new_shape[axis + 1]
+    interior = blended.reshape(new_shape)
+    last = np.take(a, [n], axis=axis)
+    return np.concatenate([interior, last], axis=axis)

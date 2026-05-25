@@ -114,8 +114,14 @@ def expected_error(key):
 
     filename = tests[key]['filename']
     testfilename = os.path.join(filepath, filename)
-    output = subprocess.check_output(['./em2ex.py', '-f', testfilename])
 
-    raise Em2exException(output)
+    command = ['./em2ex.py', '-f']
+    if 'cli_args' in tests[key].keys():
+        command.extend(tests[key]['cli_args'].split())
+    command.append(testfilename)
+
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    raise Em2exException(result.stdout + result.stderr)
 
     return
