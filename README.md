@@ -90,9 +90,8 @@ $ ./em2ex.py --help
 
 usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
                 [--no-nodesets] [--no-sidesets] [-f] [-u] [--flip]
-                [--translate TRANSLATE TRANSLATE] [--progress {auto,on,off}]
-                [--mapaxes] [--pinch] [--pinch-tol PINCH_TOL]
-                [--refine-xy RX RY]
+                [--translate TRANSLATE TRANSLATE] [--mapaxes] [--pinch]
+                [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
                 filename
 
 Converts earth model to Exodus II format
@@ -114,9 +113,6 @@ options:
   --flip                Flip the sign of the Z coordinates
   --translate TRANSLATE TRANSLATE
                         Translate the (x, y) coordinates by this amount
-  --progress {auto,on,off}
-                        Progress bars for Eclipse conversion: auto (>100000
-                        cells), on, or off
   --mapaxes             Use the MAPAXES coordinates for an Eclipse file
   --pinch               Remove pinched elements
   --pinch-tol PINCH_TOL

@@ -6,48 +6,6 @@ from readers.reader_utils import *
 import os
 
 
-LARGE_GRID_PROGRESS_THRESHOLD = 100000
-
-
-class _ProgressBar(object):
-    '''Simple terminal progress bar for long-running conversion loops.'''
-
-    def __init__(self, total, label, enabled, width=32):
-        self.total = max(int(total), 1)
-        self.label = label
-        self.width = width
-        self.enabled = enabled
-        self.current = 0
-        self._last_percent = -1
-
-    def update(self, step=1):
-        if not self.enabled:
-            return
-
-        self.current += step
-        if self.current > self.total:
-            self.current = self.total
-
-        percent = int((100 * self.current) / self.total)
-        if percent == self._last_percent and self.current < self.total:
-            return
-
-        filled = int((self.width * self.current) / self.total)
-        bar = '#' * filled + '-' * (self.width - filled)
-        print('\r{}: [{}] {:3d}% ({}/{})'.format(self.label, bar, percent, self.current, self.total), end='', flush=True)
-
-        if self.current >= self.total:
-            print('')
-
-        self._last_percent = percent
-
-    def close(self):
-        if not self.enabled:
-            return
-        if self.current < self.total:
-            self.current = self.total
-            self.update(0)
-
 class EclipseData(object):
     '''Class containing data from an Eclipse file'''
 
@@ -258,17 +216,6 @@ def parseEclipse(f, args):
     nx = eclipse.nx
     ny = eclipse.ny
     nz = eclipse.nz
-    total_cells = nx * ny * nz
-    progress_mode = getattr(args, 'progress', 'auto')
-    if progress_mode == 'on':
-        show_progress = True
-    elif progress_mode == 'off':
-        show_progress = False
-    else:
-        show_progress = total_cells > LARGE_GRID_PROGRESS_THRESHOLD
-
-    if show_progress and progress_mode == 'auto':
-        print('Large Eclipse grid detected ({} cells). Enabling progress bars.'.format(total_cells))
 
     # Check the number of COORD entries parsed is correct (6 points per entry)
     if (nx+1)*(ny+1)*6 != len(list(eclipse.coord)):
@@ -392,26 +339,20 @@ def parseEclipse(f, args):
     num_active_elements = np.count_nonzero(active_elements)
 
     # Generate the connection data by numbering all unique nodes in the mesh
-    elemNodes = numberNodesInElems(elemcornz, active_elements, show_progress)
+    elemNodes = numberNodesInElems(elemcornz, active_elements)
 
-    # Construct the nodeIds for all corners in all elements
-    nodeIds = np.zeros((2*nz, 2*ny,2*nx))
-
-    node_ids_progress = _ProgressBar(total_cells, 'Building node ID map', show_progress)
-    for k in range(0, nz):
-        for j in range(0, ny):
-            for i in range(0, nx):
-                if active_elements[k, j, i]:
-                    nodeIds[2*k, 2*j, 2*i] = elemNodes[k, j, i, 0]
-                    nodeIds[2*k, 2*j, 2*i + 1] = elemNodes[k, j, i, 1]
-                    nodeIds[2*k, 2*j + 1, 2*i] = elemNodes[k, j, i, 3]
-                    nodeIds[2*k, 2*j + 1, 2*i + 1] = elemNodes[k, j, i, 2]
-                    nodeIds[2*k + 1, 2*j, 2*i] = elemNodes[k, j, i, 4]
-                    nodeIds[2*k + 1, 2*j, 2*i + 1] = elemNodes[k, j, i, 5]
-                    nodeIds[2*k + 1, 2*j + 1, 2*i] = elemNodes[k, j, i, 7]
-                    nodeIds[2*k + 1, 2*j + 1, 2*i + 1] = elemNodes[k, j, i, 6]
-                node_ids_progress.update()
-    node_ids_progress.close()
+    # Construct the nodeIds for all corners in all elements. Inactive cells
+    # contribute zeros (no node IDs written), matching the per-cell loop's
+    # behaviour. Permute the per-cell corner axis into (kk, jj, ii) flat order,
+    # zero inactive cells, then interleave the (kk, jj, ii) sub-axis into
+    # (2*nz, 2*ny, 2*nx).
+    permuted = np.zeros_like(elemNodes)
+    permuted[..., _CORNER_TO_KJI] = elemNodes
+    permuted *= active_elements.astype(bool)[..., None]
+    nodeIds = (permuted.reshape(nz, ny, nx, 2, 2, 2)
+                       .transpose(0, 3, 1, 4, 2, 5)
+                       .reshape(2 * nz, 2 * ny, 2 * nx)
+                       .astype(float))
 
     # The number of active nodes is
     num_active_nodes = np.max(nodeIds).astype(int)
@@ -426,22 +367,20 @@ def parseEclipse(f, args):
     else:
         blocks = np.zeros((nz, ny, nx), dtype=int)
 
-    # Give each element an ID (from 1 to num_active_elements)
-    elemIds = np.zeros((nz, ny, nx), dtype=int)
-    elemnum = 1
-    block_ids = np.unique(blocks)
-    elem_ids_progress = _ProgressBar(total_cells * len(block_ids), 'Assigning element IDs', show_progress)
-    for blkid in block_ids:
-        for k in range(0,nz):
-            for j in range(0,ny):
-                for i in range(0,nx):
-                    # Only consider active elements
-                    if active_elements[k, j, i]:
-                        if blocks[k, j, i] == blkid:
-                            elemIds[k,j,i] = elemnum
-                            elemnum+=1
-                    elem_ids_progress.update()
-    elem_ids_progress.close()
+    # Give each active element an ID from 1 to num_active_elements. Numbering
+    # walks block IDs in ascending order (matching np.unique(blocks)); within
+    # each block, cells are visited in (k, j, i) C-order. A stable sort by
+    # block ID preserves that within-block order, and a cumulative count over
+    # the sorted active mask assigns the sequential IDs in one pass.
+    flat_blocks = blocks.flatten()
+    flat_active = active_elements.flatten() > 0
+    order = np.argsort(flat_blocks, kind='stable')
+    active_sorted = flat_active[order]
+    ids_sorted = np.zeros(flat_blocks.size, dtype=int)
+    ids_sorted[active_sorted] = np.arange(1, int(active_sorted.sum()) + 1)
+    elemIds = np.empty(flat_blocks.size, dtype=int)
+    elemIds[order] = ids_sorted
+    elemIds = elemIds.reshape(nz, ny, nx)
 
     # Order the coordinates according to the node numbering
     elemNodes = elemNodes.reshape(nz*ny*nx, 8)
@@ -457,19 +396,21 @@ def parseEclipse(f, args):
     if args.flip_z:
         elemNodes = elemNodes[:, [4, 5, 6, 7, 0, 1, 2, 3]]
 
-    # If an axis has been flipped, also flip the elemProps
+    # Apply any axis flips and then strip inactive elements from every prop in
+    # a single pass. The active mask and the flip decisions are constant across
+    # props, so they're computed once outside the loop.
+    active_mask = active_elements.flatten() > 0
+    needs_flip = flip_x or flip_y
     for prop in eclipse.elemProps:
-        if flip_x:
-            tmp_prop = eclipse.elemProps[prop].reshape(nz, ny, nx)
-            eclipse.elemProps[prop] = np.flip(tmp_prop, 2).flatten()
-
-        if flip_y:
-            tmp_prop = eclipse.elemProps[prop].reshape(nz, ny, nx)
-            eclipse.elemProps[prop] = np.flip(tmp_prop, 1).flatten()
-
-    # Remove elemental properties in inactive elements
-    for prop in eclipse.elemProps:
-        eclipse.elemProps[prop] = eclipse.elemProps[prop][active_elements.flatten() > 0]
+        arr = eclipse.elemProps[prop]
+        if needs_flip:
+            arr = arr.reshape(nz, ny, nx)
+            if flip_x:
+                arr = np.flip(arr, 2)
+            if flip_y:
+                arr = np.flip(arr, 1)
+            arr = arr.flatten()
+        eclipse.elemProps[prop] = arr[active_mask]
 
     # Add data to the ExodusModel object
     model = ExodusModel()
@@ -507,29 +448,29 @@ def parseEclipse(f, args):
 
     return model
 
+# Corner-index permutation between the zcorn (kk, jj, ii) layout (flat index
+# kk*4 + jj*2 + ii) and the eight-corner element ordering used downstream:
+#   element corner 0 -> (kk=0, jj=0, ii=0) flat 0
+#   element corner 1 -> (kk=0, jj=0, ii=1) flat 1
+#   element corner 2 -> (kk=0, jj=1, ii=1) flat 3
+#   element corner 3 -> (kk=0, jj=1, ii=0) flat 2
+#   element corner 4 -> (kk=1, jj=0, ii=0) flat 4
+#   element corner 5 -> (kk=1, jj=0, ii=1) flat 5
+#   element corner 6 -> (kk=1, jj=1, ii=1) flat 7
+#   element corner 7 -> (kk=1, jj=1, ii=0) flat 6
+_CORNER_TO_KJI = [0, 1, 3, 2, 4, 5, 7, 6]
+
 def elemCornerCoords(corner_coords):
-    ''' Returns coordinates for all eight corner of each element '''
-
-    # Each corner_coords array is twice the number of elements in each direction
+    ''' Returns coordinates for all eight corners of each element. Input is
+    shape (2*nz, 2*ny, 2*nx); output is shape (nz*ny*nx, 8) ordered in the
+    eight-corner element layout. '''
     dnz, dny, dnx = corner_coords.shape
-    numelems = int((dnx * dny * dnz) / 8)
-    elemCorns = np.zeros((numelems, 8))
-
-    elemcounter = 0;
-    for k in range(0, dnz, 2):
-        for j in range(0, dny, 2):
-            for i in range(0, dnx, 2):
-                elemCorns[elemcounter, 0] = corner_coords[k, j, i]
-                elemCorns[elemcounter, 1] = corner_coords[k, j, i+1]
-                elemCorns[elemcounter, 2] = corner_coords[k, j+1, i+1]
-                elemCorns[elemcounter, 3] = corner_coords[k, j+1, i]
-                elemCorns[elemcounter, 4] = corner_coords[k+1, j, i]
-                elemCorns[elemcounter, 5] = corner_coords[k+1, j, i+1]
-                elemCorns[elemcounter, 6] = corner_coords[k+1, j+1, i+1]
-                elemCorns[elemcounter, 7] = corner_coords[k+1, j+1, i]
-                elemcounter += 1
-
-    return elemCorns
+    nz, ny, nx = dnz // 2, dny // 2, dnx // 2
+    # (2nz, 2ny, 2nx) -> (nz, 2, ny, 2, nx, 2) -> (nz, ny, nx, 2_kk, 2_jj, 2_ii)
+    c = (corner_coords.reshape(nz, 2, ny, 2, nx, 2)
+                      .transpose(0, 2, 4, 1, 3, 5)
+                      .reshape(nz * ny * nx, 8))
+    return c[:, _CORNER_TO_KJI]
 
 def coordToCorn(coord, nz):
     ''' Transform coord data (x, y) coordinates to (x, y) corners for each node '''
@@ -542,9 +483,13 @@ def coordToCorn(coord, nz):
     xcorn = np.repeat(np.repeat(xdata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
     ycorn = np.repeat(np.repeat(ydata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
 
-    # Repeat each row 2 nz times
-    xcorn = np.array([xcorn] * 2 * nz)
-    ycorn = np.array([ycorn] * 2 * nz)
+    # Pillars do not vary with k, so the (2*ny, 2*nx) layer is the same for
+    # every k-slice. np.broadcast_to returns a zero-copy read-only view of
+    # shape (2*nz, 2*ny, 2*nx); the downstream reshape inside
+    # elemCornerCoords forces a single contiguous copy at use time, rather
+    # than allocating the full layered array up-front.
+    xcorn = np.broadcast_to(xcorn, (2 * nz,) + xcorn.shape)
+    ycorn = np.broadcast_to(ycorn, (2 * nz,) + ycorn.shape)
 
     return xcorn, ycorn
 
@@ -571,81 +516,83 @@ def distortedElem(elemcornx, elemcorny, elemcornz, tol):
 
 
 
-def numberNodesInElems(elemcornz, active_elements, show_progress=False):
-    ''' Number all unique nodes in grid including fault check'''
+# Pillar (j, i) offsets per element corner — see _CORNER_TO_KJI for the corner
+# layout convention. Each corner sits on the pillar at (j + dj, i + di) of its
+# parent cell.
+_CORNER_PILLAR_DJ = np.array([0, 0, 1, 1, 0, 0, 1, 1])
+_CORNER_PILLAR_DI = np.array([0, 1, 1, 0, 0, 1, 1, 0])
 
-    # Backward-neighbor lookup table per corner index.
-    # Each entry is a list of (dk, dj, di, neighbor_corner) tuples describing
-    # which previously-visited element corners may share this node. Neighbors
-    # are checked in priority order; the first match wins.
-    CORNER_NEIGHBORS = [
-        [(-1, 0, 0, 4), (0, -1, 0, 3), (0, 0, -1, 1)],  # corner 0
-        [(-1, 0, 0, 5), (0, -1, 0, 2)],                 # corner 1
-        [(-1, 0, 0, 6)],                                # corner 2
-        [(-1, 0, 0, 7), (0, 0, -1, 2)],                 # corner 3
-        [(0, -1, 0, 7), (0, 0, -1, 5)],                 # corner 4
-        [(0, -1, 0, 6)],                                # corner 5
-        [],                                             # corner 6 — always new
-        [(0, 0, -1, 6)],                                # corner 7
-    ]
 
+def numberNodesInElems(elemcornz, active_elements):
+    ''' Number all unique nodes in the grid, fault-aware.
+
+    Two corners are the same node iff they share a pillar and have equal z
+    within tolerance. Implemented as a single lexsort on (pillar_id, z): every
+    contiguous run in the sorted array (where pillars match and z gaps stay
+    below `np.isclose`'s combined tolerance) is one node. Nodes are numbered
+    by the smallest (k, j, i, corner) flat index at which an active cell first
+    touches them, which matches the order the original loop assigned IDs.
+    Inactive corners stay zero so the downstream filter drops their cells.
+    '''
     nz, ny, nx = active_elements.shape
-    elemcornz = elemcornz.reshape(nz, ny, nx, 8)
-    elemNodes = np.zeros((nz, ny, nx, 8), dtype=int)
+    n_corners = nz * ny * nx * 8
+    if n_corners == 0:
+        return np.zeros((nz, ny, nx, 8), dtype=int)
 
-    nodenum = 1
-    progress = _ProgressBar(nz * ny * nx, 'Numbering unique nodes', show_progress)
+    # Per-corner pillar IDs of shape (ny, nx, 8); independent of k, broadcast
+    # across k. pillar_id = (j + dj_c) * (nx+1) + (i + di_c).
+    j_grid = np.arange(ny)[:, None, None]   # (ny, 1, 1)
+    i_grid = np.arange(nx)[None, :, None]   # (1, nx, 1)
+    pillar_per_layer = (j_grid + _CORNER_PILLAR_DJ) * (nx + 1) + (i_grid + _CORNER_PILLAR_DI)
+    pillar_id = np.broadcast_to(pillar_per_layer, (nz, ny, nx, 8))
 
-    for k in range(nz):
-        for j in range(ny):
-            for i in range(nx):
-                if not active_elements[k, j, i]:
-                    progress.update()
-                    continue
+    # Flatten (pillar, z, active) into per-corner arrays of length 8*N.
+    all_pillars = pillar_id.reshape(n_corners)
+    all_z = elemcornz.reshape(n_corners)
+    all_active = np.repeat(active_elements.astype(bool).flatten(), 8)
 
-                for corner, neighbors in enumerate(CORNER_NEIGHBORS):
-                    # Try to reuse a node from a previously-visited neighbor
-                    existing = _find_neighbor_node(elemNodes, elemcornz, k, j, i, corner, neighbors)
-                    if existing:
-                        elemNodes[k, j, i, corner] = existing
-                    else:
-                        # Assign a new node and back-fill the first matching
-                        # inactive neighbor so it shares this node
-                        elemNodes[k, j, i, corner] = nodenum
-                        _backfill_inactive_neighbor(elemNodes, elemcornz, k, j, i, corner, neighbors, nodenum)
-                        nodenum += 1
+    # Sort primarily by pillar, secondarily by z (ascending).
+    sort_key = np.lexsort((all_z, all_pillars))
+    sp = all_pillars[sort_key]
+    sz = all_z[sort_key]
 
-                progress.update()
+    # Mark group boundaries: pillar changes, or z gap exceeds np.isclose's
+    # combined tolerance (atol + rtol * max(|a|, |b|)). Sorted-ascending z
+    # means gap = sz[1:] - sz[:-1] is non-negative.
+    atol, rtol = 1e-8, 1e-5
+    new_grp = np.empty(n_corners, dtype=bool)
+    new_grp[0] = True
+    if n_corners > 1:
+        gap = sz[1:] - sz[:-1]
+        tol_per_pair = atol + rtol * np.maximum(np.abs(sz[1:]), np.abs(sz[:-1]))
+        new_grp[1:] = (sp[1:] != sp[:-1]) | (gap > tol_per_pair)
+    grp_sorted = np.cumsum(new_grp) - 1
+    num_groups = int(grp_sorted[-1]) + 1
 
-    progress.close()
+    # Scatter group IDs back to original (k, j, i, c) order.
+    group_id = np.empty(n_corners, dtype=np.int64)
+    group_id[sort_key] = grp_sorted
 
-    return elemNodes
+    # For each group, smallest active-corner flat index (sentinel = n_corners
+    # if no active member). Groups without an active member contribute no node.
+    sentinel = n_corners
+    first_active = np.full(num_groups, sentinel, dtype=np.int64)
+    active_flat_idx = np.nonzero(all_active)[0]
+    np.minimum.at(first_active, group_id[active_flat_idx], active_flat_idx)
+    active_group_mask = first_active < sentinel
 
+    # Number active groups in ascending first-active-index order — same numbering
+    # the original loop produced when walking (k, j, i, corner) and assigning a
+    # fresh ID at each new node it created.
+    active_groups = np.nonzero(active_group_mask)[0]
+    order = active_groups[np.argsort(first_active[active_groups])]
+    new_id = np.zeros(num_groups, dtype=np.int64)
+    new_id[order] = np.arange(1, len(order) + 1)
 
-def _find_neighbor_node(elemNodes, elemcornz, k, j, i, corner, neighbors):
-    ''' Return the node number of the first active backward neighbor whose z
-    coordinate coincides with (k, j, i, corner), or None if no match. '''
-    for dk, dj, di, nc in neighbors:
-        nk, nj, ni = k + dk, j + dj, i + di
-        if nk < 0 or nj < 0 or ni < 0:
-            continue
-        if (elemNodes[nk, nj, ni, nc] != 0
-                and np.isclose(elemcornz[k, j, i, corner], elemcornz[nk, nj, ni, nc])):
-            return elemNodes[nk, nj, ni, nc]
-    return None
-
-
-def _backfill_inactive_neighbor(elemNodes, elemcornz, k, j, i, corner, neighbors, nodenum):
-    ''' Assign nodenum to the first inactive backward neighbor whose z coordinate
-    coincides with (k, j, i, corner), so it shares the newly-created node. '''
-    for dk, dj, di, nc in neighbors:
-        nk, nj, ni = k + dk, j + dj, i + di
-        if nk < 0 or nj < 0 or ni < 0:
-            continue
-        if (elemNodes[nk, nj, ni, nc] == 0
-                and np.isclose(elemcornz[k, j, i, corner], elemcornz[nk, nj, ni, nc])):
-            elemNodes[nk, nj, ni, nc] = nodenum
-            return
+    # Build elemNodes; zero inactive corners so the downstream
+    # ~np.any(elemNodes == 0, axis=1) filter drops inactive cells cleanly.
+    elemNodes_flat = new_id[group_id] * all_active.astype(np.int64)
+    return elemNodes_flat.reshape(nz, ny, nx, 8).astype(int)
 
 
 def refineLaterally(coord, zcorn, elemProps, nx, ny, nz, rx, ry):
