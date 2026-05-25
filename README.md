@@ -92,6 +92,8 @@ usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
                 [--no-nodesets] [--no-sidesets] [-f] [-u] [--flip]
                 [--translate TRANSLATE TRANSLATE] [--mapaxes] [--pinch]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
+                [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
+                [--extract-k K_LO K_HI]
                 filename
 
 Converts earth model to Exodus II format
@@ -121,6 +123,17 @@ options:
   --refine-xy RX RY     Refine the grid laterally by integer factors RX in x
                         and RY in y (vertical resolution unchanged). Each
                         child cell inherits its parent's element properties.
+  --extract-i I_LO I_HI
+                        Extract cells I_LO..I_HI along the x-axis (1-based
+                        inclusive, Eclipse-style). Cells are taken in file
+                        order, before any coordinate-system normalisation;
+                        runs before --refine-xy if both are given.
+  --extract-j J_LO J_HI
+                        Extract cells J_LO..J_HI along the y-axis (1-based
+                        inclusive).
+  --extract-k K_LO K_HI
+                        Extract cells K_LO..K_HI along the z-axis (1-based
+                        inclusive).
 ```
 
 ### Lateral refinement (Eclipse only)
@@ -132,6 +145,31 @@ The `--refine-xy RX RY` option refines an Eclipse grid in the (x, y) plane by in
 ```
 
 `RX` and `RY` must be strictly positive integers; anything else is rejected up front with an informative error.
+
+### Extracting a subset (Eclipse only)
+
+The `--extract-i`, `--extract-j` and `--extract-k` options pull a rectangular subset of cells out of a `grdecl` model along the x-, y- and z-axes respectively. Each takes two 1-based inclusive cell indices (Eclipse-style, matching the `BOX` keyword), and each is independently optional — any axis you don't restrict is kept in full. For example, to keep only cells `i=10..30, j=5..40` across every layer:
+
+```bash
+./em2ex.py --extract-i 10 30 --extract-j 5 40 large.grdecl
+```
+
+Or to take only the top 20 layers:
+
+```bash
+./em2ex.py --extract-k 1 20 large.grdecl
+```
+
+Indices refer to cell positions **as they appear in the file** — same numbering you see in the `SPECGRID` keyword and in the order properties like `PORO` are listed. The subset is taken before any further coordinate processing.
+
+**Composition with `--refine-xy`.** If both are given, extract runs first and refinement applies to the subset (so `--extract-i 10 30 --refine-xy 2 2` extracts 21 cells along the x-axis and then refines to 42; it does *not* refine the full grid and then extract from it). This is almost always what you want — refining the whole grid just to throw most of it away would be wasteful.
+
+**Composition with `--flip` and with left-hand coordinate files.** Extract operates on the file's i/j/k indexing *before* `em2ex` flips the z values (`--flip`) or normalises a left-handed coordinate system to right-handed (which happens automatically when the file's x or y coordinates decrease). The practical consequence:
+
+- `--flip` doesn't affect which cells are extracted — only their z sign in the output. The k range you give is the same range you'd give without `--flip`.
+- For a left-handed coordinate file, the extracted region is still the cells at file indices `i=I_LO..I_HI` (etc.), exactly as they're listed in `PORO`. In the output mesh, those cells then get re-numbered through the auto-flip to the canonical right-handed system, so their i (and/or j) indices in the produced Exodus mesh may run in the opposite direction from the file's. The geometry and properties are preserved; only the index sense changes.
+
+If any range is out of bounds for the file's `SPECGRID` size, or if `LO > HI`, the conversion is rejected up front with the actual dimensions cited.
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.

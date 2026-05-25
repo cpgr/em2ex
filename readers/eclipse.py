@@ -240,6 +240,27 @@ def parseEclipse(f, args):
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
     coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
 
+    # Reshape ZCORN early so subsetting (--extract-*) can slice it. The reshape
+    # is independent of any later coord transforms (flip / translate / mapaxes /
+    # flip_z), all of which leave the (k, j, i) cell indexing unchanged.
+    zcorn = np.asarray(eclipse.zcorn).reshape(2*nz, 2*ny, 2*nx)
+
+    # Apply --extract-i/-j/-k subsetting if requested. Indices are 1-based
+    # inclusive in file order (matching the cells as they appear in the
+    # grdecl SPECGRID / properties sections), and the slice happens before
+    # any flip / translate / mapaxes / refine so the user never has to think
+    # about coordinate-system normalisation. See README for the flip caveat.
+    extract_i = getattr(args, 'extract_i', None)
+    extract_j = getattr(args, 'extract_j', None)
+    extract_k = getattr(args, 'extract_k', None)
+    if extract_i or extract_j or extract_k:
+        i_lo, i_hi = _resolve_extract_range(extract_i, nx, 'i')
+        j_lo, j_hi = _resolve_extract_range(extract_j, ny, 'j')
+        k_lo, k_hi = _resolve_extract_range(extract_k, nz, 'k')
+        coord, zcorn, eclipse.elemProps, nx, ny, nz = extractSubgrid(
+            coord, zcorn, eclipse.elemProps, nx, ny, nz,
+            i_lo, i_hi, j_lo, j_hi, k_lo, k_hi)
+
     # The exodus node numbering relies on a right-hand coordinate system, with
     # x and y increasing. However, eclipse can output a grid with a left-hand
     # coordinate system, with either (or both) x and y decreasing (ie, pointing in
@@ -292,11 +313,6 @@ def parseEclipse(f, args):
                 ydata = coord[:,:,yi].copy()
                 coord[:,:,xi] = xorigin + xdata * xvec[0] + ydata * yvec[0]
                 coord[:,:,yi] = yorigin + xdata * xvec[1] + ydata * yvec[1]
-
-    # The ZCORN data varies by x, y and then z. Reshape it into an array where
-    # the first index gives the layer, the second the y coordinates and the third
-    # the x coordinates
-    zcorn = np.asarray(eclipse.zcorn).reshape(2*nz, 2*ny, 2*nx)
 
     # Flip the Z coordinates if specified
     if args.flip_z:
@@ -593,6 +609,54 @@ def numberNodesInElems(elemcornz, active_elements):
     # ~np.any(elemNodes == 0, axis=1) filter drops inactive cells cleanly.
     elemNodes_flat = new_id[group_id] * all_active.astype(np.int64)
     return elemNodes_flat.reshape(nz, ny, nx, 8).astype(int)
+
+
+def _resolve_extract_range(rng, n, range_letter):
+    ''' Validate a 1-based inclusive extract range against the file's axis
+    size and return the 0-based half-open [lo, hi) pair to slice with. None
+    means "keep the full axis". `range_letter` is the lowercase i/j/k that
+    appears in the CLI flag and the SPECGRID NX/NY/NZ symbol. '''
+    if rng is None:
+        return 0, n
+    axis = {'i': 'x', 'j': 'y', 'k': 'z'}[range_letter]
+    specgrid_dim = {'i': 'NX', 'j': 'NY', 'k': 'NZ'}[range_letter]
+    lo_1, hi_1 = rng
+    if lo_1 > hi_1:
+        print("--extract-{} requires LO <= HI, got {} > {}".format(
+            range_letter, lo_1, hi_1))
+        exit()
+    if lo_1 < 1 or hi_1 > n:
+        print("--extract-{} range {}..{} is out of bounds for the {}-axis ({}={} in SPECGRID)".format(
+            range_letter, lo_1, hi_1, axis, specgrid_dim, n))
+        exit()
+    return lo_1 - 1, hi_1
+
+
+def extractSubgrid(coord, zcorn, elemProps, nx, ny, nz,
+                   i_lo, i_hi, j_lo, j_hi, k_lo, k_hi):
+    ''' Slice the grid to the given (i, j, k) ranges. Inputs are in file order
+    (the slice runs before any flip / translate / mapaxes); ranges are 0-based
+    half-open [lo, hi).
+
+    Inputs:
+        coord     : (ny+1, nx+1, 6)        pillar top/bottom (x, y, z)
+        zcorn     : (2*nz, 2*ny, 2*nx)     per-cell corner z values
+        elemProps : dict[name -> flat ndarray of length nx*ny*nz]
+
+    Returns (coord, zcorn, elemProps, new_nx, new_ny, new_nz) for the subset.
+    '''
+    # Pillars in (j, i): keep one extra pillar past the high end to bound the
+    # last cell. .copy() decouples from the original so downstream writes (e.g.
+    # the translate block) don't accidentally mutate it.
+    coord = coord[j_lo:j_hi+1, i_lo:i_hi+1, :].copy()
+    zcorn = zcorn[2*k_lo:2*k_hi, 2*j_lo:2*j_hi, 2*i_lo:2*i_hi].copy()
+
+    new_elemProps = {}
+    for name, vals in elemProps.items():
+        p = np.asarray(vals).reshape(nz, ny, nx)[k_lo:k_hi, j_lo:j_hi, i_lo:i_hi]
+        new_elemProps[name] = p.flatten()
+
+    return coord, zcorn, new_elemProps, i_hi - i_lo, j_hi - j_lo, k_hi - k_lo
 
 
 def refineLaterally(coord, zcorn, elemProps, nx, ny, nz, rx, ry):
