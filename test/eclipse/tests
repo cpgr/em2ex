@@ -62,6 +62,12 @@ simple_cube_pinch:
   cli_args: --pinch
   gold: simple_cube_pinch.e
 
+simple_cube_refine:
+  filename: simple_cube_refine.grdecl
+  type: exodiff
+  cli_args: --refine-xy 2 3
+  gold: simple_cube_refine.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception
@@ -91,3 +97,27 @@ incorrect_property:
   filename: incorrect_property.grdecl
   type: exception
   expected_error: The number of PORO entries read is not correct
+
+refine_xy_zero:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --refine-xy 0 2
+  expected_error: refinement factor must be >= 1
+
+refine_xy_negative:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --refine-xy 2 -3
+  expected_error: refinement factor must be >= 1
+
+refine_xy_non_integer:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --refine-xy 1.5 2
+  expected_error: refinement factor must be a positive integer
+
+refine_xy_garbage:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --refine-xy foo 2
+  expected_error: refinement factor must be a positive integer

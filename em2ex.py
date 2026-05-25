@@ -8,6 +8,18 @@ from exodus_model import ExodusModel
 import argparse
 import os
 
+def _positive_int(s):
+    ''' argparse type for strictly positive integer refinement factors. '''
+    try:
+        v = int(s)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(
+            "refinement factor must be a positive integer, got {!r}".format(s))
+    if v < 1:
+        raise argparse.ArgumentTypeError(
+            "refinement factor must be >= 1, got {}".format(v))
+    return v
+
 def get_parser():
     ''' Read commandline options and filename '''
 
@@ -27,6 +39,9 @@ def get_parser():
     parser.add_argument('--mapaxes', dest = 'use_mapaxes', action = 'store_true', help = 'Use the MAPAXES coordinates for an Eclipse file')
     parser.add_argument('--pinch', default = True, dest = 'no_pinch', action = 'store_true', help = 'Remove pinched elements')
     parser.add_argument('--pinch-tol', default = 1e-3, dest = 'pinch_tol', type = float, help = 'Tolerance for coincident corners when removing pinched elements (default: 1e-3)')
+    parser.add_argument('--refine-xy', nargs = 2, dest = 'refine_xy', type = _positive_int,
+        metavar = ('RX', 'RY'),
+        help = 'Refine the grid laterally by integer factors RX in x and RY in y (vertical resolution unchanged). Each child cell inherits its parent\'s element properties.')
     return parser
 
 def main():

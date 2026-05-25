@@ -88,8 +88,11 @@ A number of optional commandline options are available, and can be seen by passi
 ```bash
 $ ./em2ex.py --help
 
-usage: em2ex.py [-h] [--filetype {eclipse,leapfrog}] [--no-nodesets]
-                [--no-sidesets] [-f] [-u] [--progress {auto,on,off}]
+usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
+                [--no-nodesets] [--no-sidesets] [-f] [-u] [--flip]
+                [--translate TRANSLATE TRANSLATE] [--progress {auto,on,off}]
+                [--mapaxes] [--pinch] [--pinch-tol PINCH_TOL]
+                [--refine-xy RX RY]
                 filename
 
 Converts earth model to Exodus II format
@@ -97,8 +100,10 @@ Converts earth model to Exodus II format
 positional arguments:
   filename
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
+  -o OUTPUT_FILE, --output OUTPUT_FILE
+                        File name for output
   --filetype {eclipse,leapfrog}
                         Explicitly state the filetype for unknown extensions
   --no-nodesets         Disable addition of nodesets
@@ -107,11 +112,30 @@ optional arguments:
   -u, --use-official-api
                         Use exodus.py to write files
   --flip                Flip the sign of the Z coordinates
+  --translate TRANSLATE TRANSLATE
+                        Translate the (x, y) coordinates by this amount
   --progress {auto,on,off}
                         Progress bars for Eclipse conversion: auto (>100000
                         cells), on, or off
   --mapaxes             Use the MAPAXES coordinates for an Eclipse file
+  --pinch               Remove pinched elements
+  --pinch-tol PINCH_TOL
+                        Tolerance for coincident corners when removing pinched
+                        elements (default: 1e-3)
+  --refine-xy RX RY     Refine the grid laterally by integer factors RX in x
+                        and RY in y (vertical resolution unchanged). Each
+                        child cell inherits its parent's element properties.
 ```
+
+### Lateral refinement (Eclipse only)
+
+The `--refine-xy RX RY` option refines an Eclipse grid in the (x, y) plane by integer factors `RX` and `RY`, leaving vertical resolution unchanged. This is useful for `grdecl` models whose cells are long and wide but thin: each parent cell is split into `RX * RY` children (so `--refine-xy 2 2` turns one cell into four, not eight). Pillars are linearly interpolated to create new (x, y) coordinates, per-cell top and bottom faces are bilinearly interpolated within each parent (which preserves faults), and each child cell inherits all of its parent's element properties (`PORO`, `PERMX`, `SATNUM`, `ACTNUM`, etc.).
+
+```bash
+./em2ex.py --refine-xy 2 2 simple_cube.grdecl
+```
+
+`RX` and `RY` must be strictly positive integers; anything else is rejected up front with an informative error.
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.
