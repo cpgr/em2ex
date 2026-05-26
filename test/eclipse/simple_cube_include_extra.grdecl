@@ -1,0 +1,47 @@
+-- 2x2x1 grid whose extra (--extra-keywords) property is defined in an INCLUDEd
+-- file, not in this main file. Verifies that the extra_keywords list threads
+-- through readEclipse's INCLUDE recursion.
+
+SPECGRID
+2 2 1 1 F /
+
+GRIDUNIT
+  METRES /
+
+COORD
+ 0.000 0.000 0.000 0.000 0.000 1.000
+ 1.000 0.000 0.000 1.000 0.000 1.000
+ 2.000 0.000 0.000 2.000 0.000 1.000
+ 0.000 1.000 0.000 0.000 1.000 1.000
+ 1.000 1.000 0.000 1.000 1.000 1.000
+ 2.000 1.000 0.000 2.000 1.000 1.000
+ 0.000 2.000 0.000 0.000 2.000 1.000
+ 1.000 2.000 0.000 1.000 2.000 1.000
+ 2.000 2.000 0.000 2.000 2.000 1.000
+/
+
+ZCORN
+0.0 0.0 0.0 0.0
+0.0 0.0 0.0 0.0
+0.0 0.0 0.0 0.0
+0.0 0.0 0.0 0.0
+1.0 1.0 1.0 1.0
+1.0 1.0 1.0 1.0
+1.0 1.0 1.0 1.0
+1.0 1.0 1.0 1.0
+/
+
+ACTNUM
+1 1 1 1
+/
+
+PORO
+0.2 0.3 0.4 0.5
+/
+
+SATNUM
+1 1 1 1
+/
+
+INCLUDE
+simple_cube_include_extra_props.data /

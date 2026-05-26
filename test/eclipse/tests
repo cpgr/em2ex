@@ -85,6 +85,38 @@ simple_cube_keywords_extra:
   cli_args: --extra-keywords MYTHING --
   gold: simple_cube_keywords_extra.e
 
+# Composition: extract runs first, then refine acts on the subset.
+simple_cube_extract_refine:
+  filename: simple_cube_extract.grdecl
+  type: exodiff
+  cli_args: --extract-i 2 3 --extract-j 1 2 --extract-k 1 1 --refine-xy 2 2
+  gold: simple_cube_extract_refine.e
+
+# Both extract and refine correctly handle --extra-keywords (and the
+# NTG/HEATCR/THCONR defaults pass through too).
+simple_cube_keywords_xrx:
+  filename: simple_cube_keywords.grdecl
+  type: exodiff
+  cli_args: --extract-j 1 1 --refine-xy 2 1 --extra-keywords MYTHING --
+  gold: simple_cube_keywords_xrx.e
+
+# Extra keyword PVTNUM is defined in the INCLUDEd .data file rather than the
+# main grdecl. Verifies extra_keywords threads through readEclipse's recursion.
+simple_cube_include_extra:
+  filename: simple_cube_include_extra.grdecl
+  type: exodiff
+  cli_args: --extra-keywords PVTNUM --
+  gold: simple_cube_include_extra.e
+
+# Extract from the faulted grid, keeping the central fault region. The output
+# has 120 nodes vs. 100 for an equivalent no-fault extract (4*4*3=48 cells),
+# i.e. the 20 duplicated nodes at the fault corners survive the slice.
+faulted_extract:
+  filename: faulted.grdecl
+  type: exodiff
+  cli_args: --extract-i 4 7 --extract-j 4 7 --extract-k 2 4
+  gold: faulted_extract.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception

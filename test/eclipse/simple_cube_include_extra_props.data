@@ -1,0 +1,7 @@
+-- Extra property block read by simple_cube_include_extra.grdecl via INCLUDE.
+-- PVTNUM is not a default-recognised keyword, so this file is silently
+-- skipped unless the user passes --extra-keywords PVTNUM.
+
+PVTNUM
+1 2 3 4
+/
