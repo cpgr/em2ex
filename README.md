@@ -95,6 +95,7 @@ usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
                 [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
                 [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
                 [--fault-sidesets] [--convert-to-m]
+                [--no-check-jacobians] [--strict-jacobians]
                 filename
 
 Converts earth model to Exodus II format
@@ -150,6 +151,14 @@ options:
                         the input file's GRIDUNIT keyword as the source unit.
                         Supported values are METRES (no-op), FEET and CM.
                         Files without GRIDUNIT are assumed to be in metres.
+  --no-check-jacobians  Skip the per-element Jacobian sanity check. By default
+                        em2ex computes the Jacobian at all 8 corners of every
+                        HEX8 element and warns if any are non-positive
+                        (degenerate or inverted), since those elements would
+                        be rejected by most FEM solvers.
+  --strict-jacobians    Treat any non-positive element Jacobian as a fatal
+                        error and exit non-zero. By default such elements only
+                        produce a warning. Useful for CI / scripted workflows.
 ```
 
 ### Lateral refinement (Eclipse only)
@@ -256,6 +265,34 @@ A few practical notes:
 - **Files without `GRIDUNIT`** are treated as metres (Eclipse's documented default). No info note, no conversion needed.
 - **Unrecognised `GRIDUNIT` values** print an info note saying conversion is not available; the numbers pass through. Asking for `--convert-to-m` on an unrecognised unit is rejected with a clear error.
 - **Property units are entirely the modeller's responsibility.** The `GRIDUNIT` keyword only describes the unit of the grid's coordinates. Per-cell properties like `PERMX`, `HEATCR`, `THCONR`, etc. carry their own unit conventions (Eclipse's `METRIC`, `FIELD`, `LAB`, `PVT-M` unit systems each define their own choices for pressure, flow rate, permeability, density, thermal conductivity, etc.). em2ex does not track those conventions and applies no conversion to property values, even when `--convert-to-m` is rescaling the geometry. If your input file is in `FIELD` units (psi, bbl/day, mD, BTU-based thermal quantities, etc.) and you convert the geometry to metres, the property values stay in `FIELD` units; the resulting mesh is internally inconsistent and will need property conversion downstream before it's physically meaningful.
+
+### Element Jacobian check
+
+After the mesh is built, em2ex automatically computes the Jacobian at all 8 corners of every HEX8 element and prints a one-line summary:
+
+```
+Element Jacobian check: 1000000 / 1000000 elements OK
+```
+
+A non-positive Jacobian (negative = inverted element, zero = degenerate) almost always means one of two things:
+
+- **The input file uses a `z increases upward` convention** rather than Eclipse's default `z increases downward`. The cells come out "upside down" and need `--flip` to invert the z values.
+- **There's something genuinely wrong with the input geometry** — corner ordering inconsistent within a cell, self-intersecting cells that survived pinch removal, etc.
+
+The relevance is downstream: most finite-element solvers (MOOSE, libMesh, MFEM, deal.II) reject elements with non-positive Jacobian at the assembly stage. Catching the problem at conversion time is cheaper than chasing it through a failed simulation.
+
+When the check fails, em2ex prints an expanded report with element IDs and centroid locations:
+
+```
+Element Jacobian check: 1 negative, 0 zero, 0 OK (out of 1)
+  Examples of negative-Jacobian elements (showing up to 5 of 1):
+    element 1: centroid (0.5, 0.5, 0.5), min Jacobian = -1.000e+00
+```
+
+By default the conversion continues despite warnings (the Exodus file is still written; the user is informed). Two flags adjust this:
+
+- `--strict-jacobians` upgrades any non-positive Jacobian to a fatal error (exit code 1). Useful in CI / scripted workflows where a bad mesh should stop the pipeline rather than propagate downstream.
+- `--no-check-jacobians` skips the check entirely (a small time saving on very large grids, but disables a useful safety net).
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.

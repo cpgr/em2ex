@@ -66,6 +66,10 @@ def get_parser():
         help = 'Emit paired sidesets named "fault_primary" and "fault_secondary" containing the faces on either side of every fault (any internal face where adjacent cells do not share their corner nodes).')
     parser.add_argument('--convert-to-m', dest = 'convert_to_m', action = 'store_true',
         help = 'Convert grid coordinates to metres on output, using the input file\'s GRIDUNIT keyword as the source unit. Supported values are METRES (no-op), FEET and CM. Files without GRIDUNIT are assumed to be in metres.')
+    parser.add_argument('--no-check-jacobians', dest = 'check_jacobians', action = 'store_false',
+        help = 'Skip the per-element Jacobian sanity check. By default em2ex computes the Jacobian at all 8 corners of every HEX8 element and warns if any are non-positive (degenerate or inverted), since those elements would be rejected by most FEM solvers.')
+    parser.add_argument('--strict-jacobians', dest = 'strict_jacobians', action = 'store_true',
+        help = 'Treat any non-positive element Jacobian as a fatal error and exit non-zero. By default such elements only produce a warning. Useful for CI / scripted workflows.')
     return parser
 
 def main():
@@ -103,6 +107,13 @@ def main():
     else:
         print('File extension ', file_extension, ' not supported')
         exit()
+
+    # Mesh quality: check element Jacobians before writing the Exodus file.
+    # Default is to warn but continue; --strict-jacobians upgrades to a fatal
+    # error; --no-check-jacobians skips the check entirely.
+    if getattr(args, 'check_jacobians', True):
+        from readers.reader_utils import checkElementJacobians
+        checkElementJacobians(model, strict=getattr(args, 'strict_jacobians', False))
 
     # After parsing the reservoir model, the Exodus file can be written
     # Model dimension (default is 3)

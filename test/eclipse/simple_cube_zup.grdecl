@@ -1,0 +1,28 @@
+-- 1-cell grid in "z increases upward" convention (pillar tops at z=1, bots
+-- at z=0; ZCORN top values 1.0, bot values 0.0). Eclipse's standard convention
+-- is z increasing downward, so em2ex's HEX8 corner ordering treats this file
+-- as inverted: it produces an element with negative Jacobian at every corner.
+--
+-- Used to verify the --strict-jacobians flag actually errors out on a known
+-- bad mesh.
+
+SPECGRID
+1 1 1 1 F /
+
+COORD
+ 0.0 0.0 1.0 0.0 0.0 0.0
+ 1.0 0.0 1.0 1.0 0.0 0.0
+ 0.0 1.0 1.0 0.0 1.0 0.0
+ 1.0 1.0 1.0 1.0 1.0 0.0
+/
+
+ZCORN
+1.0 1.0
+1.0 1.0
+0.0 0.0
+0.0 0.0
+/
+
+PORO
+0.5
+/

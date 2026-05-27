@@ -141,6 +141,15 @@ simple_cube_feet_converted:
   cli_args: --convert-to-m
   gold: simple_cube_feet_converted.e
 
+# Z-up convention file (pillar tops at z=1, bots at z=0). em2ex's default
+# corner ordering treats this as inverted; --strict-jacobians should error
+# out rather than write a mesh
+strict_jacobians_inverted:
+  filename: simple_cube_zup.grdecl
+  type: exception
+  cli_args: --strict-jacobians
+  expected_error: exiting due to invalid Jacobians
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception
