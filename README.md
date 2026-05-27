@@ -94,6 +94,7 @@ usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
                 [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
                 [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
+                [--fault-sidesets]
                 filename
 
 Converts earth model to Exodus II format
@@ -141,6 +142,10 @@ options:
                         uppercase. The reader recognises ACTNUM, SATNUM, PORO,
                         PERMX, PERMY, PERMZ, NTG, HEATCR and THCONR by
                         default.
+  --fault-sidesets      Emit paired sidesets named "fault_primary" and
+                        "fault_secondary" containing the faces on either side
+                        of every fault (any internal face where adjacent cells
+                        do not share their corner nodes).
 ```
 
 ### Lateral refinement (Eclipse only)
@@ -203,6 +208,23 @@ A few practical notes:
   ./em2ex.py model.grdecl --extra-keywords PVTNUM EQLNUM
   ./em2ex.py --extra-keywords PVTNUM EQLNUM -- model.grdecl
   ```
+
+### Fault sidesets (Eclipse only)
+
+When the input grdecl describes a faulted reservoir (cells on either side of a fault have different z values at the shared pillar), the resulting Exodus mesh is **topologically disconnected** across the fault — cells on each side own their own nodes, with no element neighbourship bridging the gap. The `--fault-sidesets` flag emits two paired sidesets so a downstream solver has named boundaries to attach cross-fault physics to:
+
+```bash
+./em2ex.py --fault-sidesets faulted.grdecl
+```
+
+- **`fault_primary`** — the face on the "left/back/lower" side of every fault face (i.e. the lower-(i, j, k)-index cell's face that abuts the discontinuity).
+- **`fault_secondary`** — the matching face on the "right/front/upper" side (the higher-index cell's face).
+
+The two sidesets always have the same length and the entries are ordered consistently — `fault_primary[n]` and `fault_secondary[n]` describe the same physical fault face, viewed from each side.
+
+Detection is purely topological: any internal face where the two adjacent cells disagree on their four shared face-corner node IDs becomes a fault face. This catches i-, j- and k-direction discontinuities equally; pinched cells (removed by `--pinch`) don't appear since they're already inactive by the time fault detection runs.
+
+Without `--fault-sidesets`, the output is unchanged and only the six standard boundary sidesets are written.
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.

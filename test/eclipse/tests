@@ -117,6 +117,15 @@ faulted_extract:
   cli_args: --extract-i 4 7 --extract-j 4 7 --extract-k 2 4
   gold: faulted_extract.e
 
+# --fault-sidesets emits paired "fault_primary"/"fault_secondary" sidesets
+# (50 faces each on this grid) for downstream solvers to attach cross-fault
+# physics to.
+faulted_fault_sidesets:
+  filename: faulted.grdecl
+  type: exodiff
+  cli_args: --fault-sidesets
+  gold: faulted_fault_sidesets.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception

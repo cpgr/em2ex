@@ -415,6 +415,13 @@ def parseEclipse(f, args):
     elemIds[order] = ids_sorted
     elemIds = elemIds.reshape(nz, ny, nx)
 
+    # Detect fault faces while elemNodes is still 4D and elemIds is in (k,j,i)
+    # layout. Recorded here, appended as paired sidesets after addSideSets runs.
+    if getattr(args, 'fault_sidesets', False):
+        fault_data = _detectFaultFaces(elemNodes, elemIds, active_elements)
+    else:
+        fault_data = None
+
     # Order the coordinates according to the node numbering
     elemNodes = elemNodes.reshape(nz*ny*nx, 8)
 
@@ -468,6 +475,21 @@ def parseEclipse(f, args):
         if args.flip_z:
             model.sideSetSides[0], model.sideSetSides[5] = model.sideSetSides[5], model.sideSetSides[0]
             model.sideSetNames[0], model.sideSetNames[5] = model.sideSetNames[5], model.sideSetNames[0]
+
+        # Append fault sidesets if requested. Each fault face produces two
+        # sideset entries: one for the "primary" cell's face, one for the
+        # "secondary" cell's face. flip_z swaps the kk_lo/kk_hi side numbers
+        # (5 <-> 6) so k-direction fault entries need the same correction.
+        if fault_data is not None:
+            p_elems, p_sides, s_elems, s_sides = fault_data
+            if args.flip_z:
+                p_sides = [{5: 6, 6: 5}.get(s, s) for s in p_sides]
+                s_sides = [{5: 6, 6: 5}.get(s, s) for s in s_sides]
+            model.sideSets.extend([np.asarray(p_elems, dtype=int),
+                                   np.asarray(s_elems, dtype=int)])
+            model.sideSetSides.extend([p_sides, s_sides])
+            model.sideSetNames.extend(['fault_primary', 'fault_secondary'])
+            model.numSideSets = len(model.sideSets)
 
     # Add nodesets if required
     if args.omit_nodesets:
@@ -626,6 +648,91 @@ def numberNodesInElems(elemcornz, active_elements):
     # ~np.any(elemNodes == 0, axis=1) filter drops inactive cells cleanly.
     elemNodes_flat = new_id[group_id] * all_active.astype(np.int64)
     return elemNodes_flat.reshape(nz, ny, nx, 8).astype(int)
+
+
+def _detectFaultFaces(elemNodes, elemIds, active_elements):
+    ''' Scan all internal faces of the grid and identify fault faces — those
+    where two i, j, or k-adjacent cells fail to share their 4 face-corner
+    node IDs (i.e. numberNodesInElems gave them different nodes because the
+    z values diverged at the shared pillar).
+
+    Returns four equal-length lists describing the paired sidesets:
+      primary_elems[n], primary_sides[n]   — left/back/lower cell's face
+      secondary_elems[n], secondary_sides[n] — right/front/upper cell's face
+
+    Side numbers follow the standard Exodus II HEX8 convention used elsewhere
+    in this file: 1=jj_lo, 2=ii_hi, 3=jj_hi, 4=ii_lo, 5=kk_lo, 6=kk_hi. They
+    are recorded in the natural pre-flip-z element node order; the caller is
+    responsible for swapping 5 <-> 6 for k-direction entries if flip_z is on.
+    '''
+    nz, ny, nx, _ = elemNodes.shape
+    primary_elems, primary_sides = [], []
+    secondary_elems, secondary_sides = [], []
+
+    def _record(left_ids, right_ids, left_side, right_side):
+        valid = (left_ids > 0) & (right_ids > 0)
+        n_face = int(valid.sum())
+        if n_face == 0:
+            return
+        primary_elems.extend(left_ids[valid].tolist())
+        primary_sides.extend([left_side] * n_face)
+        secondary_elems.extend(right_ids[valid].tolist())
+        secondary_sides.extend([right_side] * n_face)
+
+    active_bool = active_elements.astype(bool)
+
+    # I-direction: cell (k, j, i) right face <-> cell (k, j, i+1) left face.
+    # Shared corner pairs (left -> right): 1->0, 2->3, 5->4, 6->7.
+    if nx > 1:
+        left = elemNodes[:, :, :-1, :]
+        right = elemNodes[:, :, 1:, :]
+        both = active_bool[:, :, :-1] & active_bool[:, :, 1:]
+        mismatch = (
+            (left[..., 1] != right[..., 0]) |
+            (left[..., 2] != right[..., 3]) |
+            (left[..., 5] != right[..., 4]) |
+            (left[..., 6] != right[..., 7])
+        ) & both
+        k_idx, j_idx, i_idx = np.where(mismatch)
+        _record(elemIds[k_idx, j_idx, i_idx],
+                elemIds[k_idx, j_idx, i_idx + 1],
+                2, 4)
+
+    # J-direction: cell (k, j, i) back face <-> cell (k, j+1, i) front face.
+    # Shared corner pairs (back -> front): 3->0, 2->1, 7->4, 6->5.
+    if ny > 1:
+        back = elemNodes[:, :-1, :, :]
+        front = elemNodes[:, 1:, :, :]
+        both = active_bool[:, :-1, :] & active_bool[:, 1:, :]
+        mismatch = (
+            (back[..., 3] != front[..., 0]) |
+            (back[..., 2] != front[..., 1]) |
+            (back[..., 7] != front[..., 4]) |
+            (back[..., 6] != front[..., 5])
+        ) & both
+        k_idx, j_idx, i_idx = np.where(mismatch)
+        _record(elemIds[k_idx, j_idx, i_idx],
+                elemIds[k_idx, j_idx + 1, i_idx],
+                3, 1)
+
+    # K-direction: cell (k, j, i) kk_hi face <-> cell (k+1, j, i) kk_lo face.
+    # Shared corner pairs (lower cell -> upper cell): 4->0, 5->1, 6->2, 7->3.
+    if nz > 1:
+        lower = elemNodes[:-1, :, :, :]
+        upper = elemNodes[1:, :, :, :]
+        both = active_bool[:-1, :, :] & active_bool[1:, :, :]
+        mismatch = (
+            (lower[..., 4] != upper[..., 0]) |
+            (lower[..., 5] != upper[..., 1]) |
+            (lower[..., 6] != upper[..., 2]) |
+            (lower[..., 7] != upper[..., 3])
+        ) & both
+        k_idx, j_idx, i_idx = np.where(mismatch)
+        _record(elemIds[k_idx, j_idx, i_idx],
+                elemIds[k_idx + 1, j_idx, i_idx],
+                6, 5)
+
+    return primary_elems, primary_sides, secondary_elems, secondary_sides
 
 
 def _resolve_extract_range(rng, n, range_letter):

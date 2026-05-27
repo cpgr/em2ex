@@ -62,6 +62,8 @@ def get_parser():
     parser.add_argument('--extra-keywords', nargs = '+', dest = 'extra_keywords',
         type = _eclipse_keyword, metavar = 'KEY',
         help = 'Additional per-cell property keywords to read from the grdecl file (e.g. PVTNUM EQLNUM FIPNUM). Each must be a per-cell scalar of length NX*NY*NZ. Normalised to uppercase. The reader recognises ACTNUM, SATNUM, PORO, PERMX, PERMY, PERMZ, NTG, HEATCR and THCONR by default.')
+    parser.add_argument('--fault-sidesets', dest = 'fault_sidesets', action = 'store_true',
+        help = 'Emit paired sidesets named "fault_primary" and "fault_secondary" containing the faces on either side of every fault (any internal face where adjacent cells do not share their corner nodes).')
     return parser
 
 def main():
