@@ -1,0 +1,12 @@
+# Example em2ex config file. Drives the same conversion as the yaml entry
+# `simple_cube_extract_refine` (extract a sub-region and then refine it).
+#
+# Keys are CLI flag names with the leading `--` stripped (and hyphens may be
+# converted to underscores for YAML cleanliness). Sequences map to multi-value
+# flags, booleans to store_true/store_false flags. CLI flags override these
+# values when both are given.
+
+extract_i: [2, 3]
+extract_j: [1, 2]
+extract_k: [1, 1]
+refine_xy: [2, 2]

@@ -82,21 +82,59 @@ Similarly, the `test/leapfrog` directory contains a set of example Leapfrog rese
 ```
 for example.
 
+## Configuration files
+
+Once a workflow uses more than a handful of options, putting them in a config file is easier than re-typing the same command line. `em2ex` accepts a YAML config via `--config`:
+
+```bash
+./em2ex.py --config my_workflow.yaml model.grdecl
+```
+
+The config is a YAML mapping. Each key is **the CLI flag name with the leading `--` stripped and hyphens converted to underscores** — exactly what you'd type after `--` in the shell, normalised for YAML. So `--refine-xy` becomes `refine_xy` (or, if you prefer, `refine-xy` — both work). Values follow the option's natural type: a single string or number for single-value flags, a YAML list for multi-value flags, a boolean for switches:
+
+```yaml
+# Geometry transforms
+extract_i: [10, 50]
+extract_j: [10, 50]
+refine_xy: [2, 2]
+
+# Property handling
+extra_keywords:
+  - PVTNUM
+  - EQLNUM
+
+# Output controls
+output: model.e             # corresponds to --output
+force: true                 # corresponds to --force
+fault_sidesets: true
+convert_to_m: true
+
+# Mesh quality
+strict_jacobians: true
+```
+
+The `filename` can be specified in the config too (`filename: path/to/model.grdecl`), in which case the positional argument can be omitted on the CLI.
+
+**Precedence**: command-line flags always win over config values, and config values win over the parser's own defaults. So a config that defaults `force: false` can still be overridden by passing `-f` at the prompt.
+
+**Unknown keys are rejected** with a list of valid keys, so typos like `refine_xz` (when you meant `refine_xy`) surface immediately rather than being silently ignored.
+
 ## Commandline options
 
 A number of optional commandline options are available, and can be seen by passing the `--help` flag:
 ```bash
 $ ./em2ex.py --help
 
-usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
-                [--no-nodesets] [--no-sidesets] [-f] [-u] [--flip]
+usage: em2ex.py [-h] [--config FILE] [-o OUTPUT_FILE]
+                [--filetype {eclipse,leapfrog}] [--no-nodesets]
+                [--no-sidesets] [-f] [-u] [--flip]
                 [--translate TRANSLATE TRANSLATE] [--mapaxes] [--pinch]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
                 [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
                 [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
                 [--fault-sidesets] [--convert-to-m]
                 [--no-check-jacobians] [--strict-jacobians]
-                filename
+                [filename]
 
 Converts earth model to Exodus II format
 
@@ -105,6 +143,11 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
+  --config FILE         YAML config file specifying default values for any of
+                        this script's options. Values from the config are
+                        overridden by command-line flags. Use the option's
+                        `dest` name as the key (e.g. refine_xy, extract_i,
+                        extra_keywords).
   -o OUTPUT_FILE, --output OUTPUT_FILE
                         File name for output
   --filetype {eclipse,leapfrog}

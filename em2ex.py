@@ -7,6 +7,75 @@ from readers import eclipse, leapfrog
 from exodus_model import ExodusModel
 import argparse
 import os
+import sys
+
+def _load_config(path):
+    ''' Load a YAML config file. The file must contain a mapping from option
+    `dest` names (e.g. `refine_xy`, `extract_i`, `extra_keywords`) to values.
+    Lists are written as YAML sequences; booleans as `true` / `false`.
+    Returns the loaded dict. '''
+    import yaml
+    if not os.path.exists(path):
+        sys.exit("Config file not found: {}".format(path))
+    with open(path) as f:
+        cfg = yaml.safe_load(f) or {}
+    if not isinstance(cfg, dict):
+        sys.exit("Config file must contain a YAML mapping (got {})".format(type(cfg).__name__))
+    return cfg
+
+def _build_config_key_mapping(parser):
+    ''' Build a mapping from acceptable config-file key names to canonical
+    argparse `dest` names. The user can write any of:
+
+      - the CLI flag name with leading dashes stripped (e.g. `refine-xy`)
+      - the CLI flag name with hyphens converted to underscores (`refine_xy`)
+      - the argparse `dest` itself (also `refine_xy` here, but for options like
+        `--flip` -> `flip_z` or `--force` -> `force_overwrite` the dest is
+        different from the flag and both forms are accepted)
+
+    Short options (e.g. `-f`) are deliberately excluded to keep the config
+    keys descriptive. Returns (mapping, valid_canonical_keys).
+    '''
+    mapping = {}
+    canonical = []
+    for action in parser._actions:
+        if action.dest == 'help':
+            continue
+        canonical.append(action.dest)
+        # The dest itself is always accepted.
+        mapping[action.dest] = action.dest
+        # Each long-option flag is also accepted (after stripping `--` and
+        # normalising hyphens to underscores).
+        for opt in action.option_strings:
+            stripped = opt.lstrip('-')
+            if len(stripped) < 2:
+                continue   # skip short flags like -f / -o / -u
+            mapping[stripped.replace('-', '_')] = action.dest
+    return mapping, sorted(canonical)
+
+
+def _validate_and_normalize_config(cfg, parser):
+    ''' Resolve every config key to its canonical `dest` name. Accepts the
+    flexible forms documented in _build_config_key_mapping; rejects anything
+    that doesn't match any option, listing the valid keys.
+
+    Returns a new dict keyed by canonical `dest` names. '''
+    mapping, canonical = _build_config_key_mapping(parser)
+    normalized = {}
+    unknown = []
+    for key, value in cfg.items():
+        candidate = key.lstrip('-').replace('-', '_')
+        if candidate in mapping:
+            normalized[mapping[candidate]] = value
+        else:
+            unknown.append(key)
+    if unknown:
+        sys.exit(
+            "Unknown keys in config file: {}\n"
+            "Valid keys (or any long CLI flag name with leading dashes\n"
+            "stripped and hyphens converted to underscores): {}".format(
+                ', '.join(unknown), ', '.join(canonical)))
+    return normalized
 
 def _positive_int(s):
     ''' argparse type for strictly positive integers (refinement factors and
@@ -34,7 +103,10 @@ def get_parser():
     ''' Read commandline options and filename '''
 
     parser = argparse.ArgumentParser(description='Converts earth model to Exodus II format')
-    parser.add_argument('filename')
+    parser.add_argument('filename', nargs='?', default=None,
+        help='Input reservoir model file. Optional only when provided via --config.')
+    parser.add_argument('--config', dest='config_file', default=None, metavar='FILE',
+        help='YAML config file specifying default values for any of this script\'s options. Values from the config are overridden by command-line flags. Use the option\'s `dest` name as the key (e.g. refine_xy, extract_i, extra_keywords).')
     parser.add_argument('-o', '--output', default = None, dest = 'output_file', help = 'File name for output')
     parser.add_argument('--filetype', default = None, dest = 'filetype',
         choices = ['eclipse', 'leapfrog'], help = 'Explicitly state the filetype for unknown extensions')
@@ -75,9 +147,21 @@ def get_parser():
 def main():
     ''' Parse the Earth model and write out an Exodus II file '''
 
-    # Parse commandline options
+    # Parse commandline options. If --config is given, load the YAML file and
+    # apply its values as parser defaults; command-line flags then override
+    # those defaults in the usual way (precedence: CLI > config > parser default).
     parser = get_parser()
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument('--config', dest='config_file', default=None)
+    pre_args, _ = pre_parser.parse_known_args()
+    if pre_args.config_file:
+        config = _load_config(pre_args.config_file)
+        config = _validate_and_normalize_config(config, parser)
+        parser.set_defaults(**config)
     args = parser.parse_args()
+
+    if not args.filename:
+        parser.error('filename is required (provide as a positional argument or as `filename: ...` in --config)')
 
     # If --use-official-api is passed, then import exodus from exodus.py. Note:
     # this requires that exodus.py is in the $PYTHONPATH environment variable

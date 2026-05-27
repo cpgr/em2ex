@@ -1,0 +1,4 @@
+# Deliberately-bad config: `refine_xz` is not a real option (refine_xy was meant).
+# Used by the yaml exception test to verify the config loader rejects typos.
+
+refine_xz: [2, 2]
