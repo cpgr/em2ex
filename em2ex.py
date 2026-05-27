@@ -64,6 +64,8 @@ def get_parser():
         help = 'Additional per-cell property keywords to read from the grdecl file (e.g. PVTNUM EQLNUM FIPNUM). Each must be a per-cell scalar of length NX*NY*NZ. Normalised to uppercase. The reader recognises ACTNUM, SATNUM, PORO, PERMX, PERMY, PERMZ, NTG, HEATCR and THCONR by default.')
     parser.add_argument('--fault-sidesets', dest = 'fault_sidesets', action = 'store_true',
         help = 'Emit paired sidesets named "fault_primary" and "fault_secondary" containing the faces on either side of every fault (any internal face where adjacent cells do not share their corner nodes).')
+    parser.add_argument('--convert-to-m', dest = 'convert_to_m', action = 'store_true',
+        help = 'Convert grid coordinates to metres on output, using the input file\'s GRIDUNIT keyword as the source unit. Supported values are METRES (no-op), FEET and CM. Files without GRIDUNIT are assumed to be in metres.')
     return parser
 
 def main():

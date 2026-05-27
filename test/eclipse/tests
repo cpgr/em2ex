@@ -126,6 +126,21 @@ faulted_fault_sidesets:
   cli_args: --fault-sidesets
   gold: faulted_fault_sidesets.e
 
+# Same numbers as simple_cube.grdecl but with GRIDUNIT FEET. Without
+# --convert-to-m, the numbers are passed through unchanged, so the output
+# is geometrically identical to simple_cube.e (just nominally in feet).
+simple_cube_feet:
+  filename: simple_cube_feet.grdecl
+  type: exodiff
+  gold: simple_cube.e
+
+# Same FEET input, now converted: every coord multiplied by 0.3048.
+simple_cube_feet_converted:
+  filename: simple_cube_feet.grdecl
+  type: exodiff
+  cli_args: --convert-to-m
+  gold: simple_cube_feet_converted.e
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception
