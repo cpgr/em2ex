@@ -367,6 +367,14 @@ def parseEclipse(f, args):
             xvec = xvec / np.sqrt(xvec[0]**2 + xvec[1]**2)
             yvec = yvec / np.sqrt(yvec[0]**2 + yvec[1]**2)
 
+            # If the MAPAXES transform is orientation-reversing (det < 0), negate xvec so
+            # the resulting mesh has positive Jacobians instead of all-negative ones.
+            det = xvec[0] * yvec[1] - xvec[1] * yvec[0]
+            if det < 0:
+                print("MAPAXES transform is orientation-reversing (det={:.6g}); "
+                      "negating x-axis direction to restore positive Jacobians".format(det))
+                xvec = -xvec
+
             # Transform top and bottom pillar x,y: world = origin + local_x*xhat + local_y*yhat
             for xi, yi in [(0, 1), (3, 4)]:
                 xdata = coord[:,:,xi].copy()
@@ -404,12 +412,40 @@ def parseEclipse(f, args):
         # All elements are active
         active_elements = np.ones((nz, ny, nx), dtype = int)
 
-    # If pinched or distorted elements are removed, these elements will also be set to
-    # be inactive.
-    # Check for pinched out elements (where the vertical distance between nodes is less than tol)
+    # Check for pinched elements (coincident corners within pinch_tol).
+    # Always detect so a count can be reported; only remove when --pinch is passed.
+    distorted = distortedElem(elemcornx, elemcorny, elemcornz, args.pinch_tol).reshape(nz, ny, nx)
+    n_pinched = int((distorted & (active_elements > 0)).sum())
     if args.no_pinch:
-        distorted = distortedElem(elemcornx, elemcorny, elemcornz, args.pinch_tol).reshape(nz, ny, nx)
+        if n_pinched > 0:
+            print('{} pinched element(s) removed'.format(n_pinched))
         active_elements[distorted] = 0
+    elif n_pinched > 0:
+        print('Note: {} element(s) have coincident corners (pinched) and will be '
+              'invalid in FEM solvers. Use --pinch to remove them.'.format(n_pinched))
+
+    # Optionally remove elements with non-positive Jacobian (degenerate or inverted).
+    # Off by default (faithful conversion); enabled with --remove-distorted.
+    if getattr(args, 'remove_distorted', False):
+        from readers.reader_utils import nonPositiveJacobianElems
+        # When z is flipped, the top/bottom corner swap applied later to elemNodes
+        # (corners [4,5,6,7,0,1,2,3]) restores positive Jacobians. Apply the same
+        # permutation here so the check reflects the final assembled element orientation.
+        cx, cy, cz = elemcornx, elemcorny, elemcornz
+        if args.flip_z:
+            perm = [4, 5, 6, 7, 0, 1, 2, 3]
+            cx, cy, cz = cx[:, perm], cy[:, perm], cz[:, perm]
+        bad_jac = nonPositiveJacobianElems(cx, cy, cz).reshape(nz, ny, nx)
+        newly_removed = bad_jac & (active_elements > 0)
+        n_removed = int(newly_removed.sum())
+        if n_removed > 0:
+            n_active = int((active_elements > 0).sum())
+            if n_removed == n_active:
+                print('Warning: --remove-distorted would remove all {} active element(s). '
+                      'Skipping removal — check grid orientation (try --flip).'.format(n_active))
+            else:
+                print('{} element(s) with zero or negative element Jacobian removed'.format(n_removed))
+                active_elements[bad_jac] = 0
 
     # The number of active elements is
     num_active_elements = np.count_nonzero(active_elements)

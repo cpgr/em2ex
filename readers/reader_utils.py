@@ -154,6 +154,12 @@ def checkElementJacobians(model, strict=False):
     print('Element Jacobian check: {} negative, {} zero, {} OK (out of {})'.format(
         num_neg, num_zero, num_ok, model.numElems))
 
+    if num_ok == 0:
+        print('  All elements have non-positive Jacobians. Possible causes:')
+        print('    - z-up coordinate convention: try --flip to invert the z-axis')
+        print('    - Orientation-reversing coordinate system (e.g. MAPAXES handedness)')
+        print('  Use --remove-distorted to remove these elements and proceed anyway.')
+
     # Map elemNodes row -> Exodus element ID. elemIds[k, j, i] holds the
     # 1-based Exodus ID (0 for inactive); the non-zero values in (k, j, i)
     # flat order align with elemNodes' row ordering.
@@ -180,6 +186,23 @@ def checkElementJacobians(model, strict=False):
         exit(1)
 
     return False
+
+
+def nonPositiveJacobianElems(elemcornx, elemcorny, elemcornz):
+    ''' Return a boolean array (numelems,) that is True for elements whose
+    minimum per-corner Jacobian is <= 0 (degenerate or inverted).
+
+    Inputs are per-element corner coordinate arrays of shape (numelems, 8),
+    ordered in the HEX8 element corner layout (matching elemCornerCoords output).
+    '''
+    P = np.stack([elemcornx, elemcorny, elemcornz], axis=-1)  # (N, 8, 3)
+    jacobians = np.empty((P.shape[0], 8))
+    for c, ((xi_a, xi_b), (eta_a, eta_b), (zeta_a, zeta_b)) in enumerate(_HEX8_JAC_EDGES):
+        e_xi   = P[:, xi_a]   - P[:, xi_b]
+        e_eta  = P[:, eta_a]  - P[:, eta_b]
+        e_zeta = P[:, zeta_a] - P[:, zeta_b]
+        jacobians[:, c] = np.einsum('ij,ij->i', e_xi, np.cross(e_eta, e_zeta))
+    return jacobians.min(axis=1) <= 0
 
 
 def nonZeroValues(arr):
