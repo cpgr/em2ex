@@ -141,6 +141,16 @@ simple_cube_feet_converted:
   cli_args: --convert-to-m
   gold: simple_cube_feet_converted.e
 
+# Same numbers as simple_cube.grdecl but the GRIDUNIT value is single-quoted
+# ('METRES' rather than METRES) -- the convention many real-world tools
+# (Petrel, etc.) emit. Output should match simple_cube.e; if the reader
+# fails to strip the quotes the unit check would misfire with an
+# "unrecognised GRIDUNIT" note.
+simple_cube_quoted_unit:
+  filename: simple_cube_quoted_unit.grdecl
+  type: exodiff
+  gold: simple_cube.e
+
 # Z-up convention file (pillar tops at z=1, bots at z=0). em2ex's default
 # corner ordering treats this as inverted; --strict-jacobians should error
 # out rather than write a mesh

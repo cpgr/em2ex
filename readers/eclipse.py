@@ -163,8 +163,13 @@ def readEclipse(f, eclipse, extra_keywords=()):
                 eclipse.mapaxes = readBlock(file)
 
             elif line.startswith('GRIDUNIT'):
-                eclipse.gridunit = next(file).split()
-                eclipse.gridunit.pop()
+                # Eclipse string keywords are conventionally written with
+                # single quotes (e.g. 'METRES' 'MAP' /). Strip the quotes so
+                # downstream comparisons against bare values like 'METRES' or
+                # 'GRID' work whether the file quotes the strings or not.
+                tokens = next(file).split()
+                tokens.pop()   # drop the trailing '/'
+                eclipse.gridunit = [t.strip("'\"") for t in tokens]
 
             elif line.startswith('COORD') and 'COORDSYS' not in line:
                 eclipse.coord = readBlock(file)
