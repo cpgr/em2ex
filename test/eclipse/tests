@@ -150,6 +150,23 @@ strict_jacobians_inverted:
   cli_args: --strict-jacobians
   expected_error: exiting due to invalid Jacobians
 
+# Driven entirely by a YAML config file (extract + refine settings). The
+# output must match the same gold as the CLI-driven simple_cube_extract_refine
+# test, proving the config loader applies values correctly.
+config_extract_refine:
+  filename: simple_cube_extract.grdecl
+  type: exodiff
+  cli_args: --config test/eclipse/config_extract_refine.yaml
+  gold: simple_cube_extract_refine.e
+
+# Typo in config key name -- the loader should reject it up front with a
+# helpful "Unknown keys" message rather than silently ignore it.
+config_bad_key:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --config test/eclipse/config_bad_key.yaml
+  expected_error: "Unknown keys in config file: refine_xz"
+
 missing_specgrid:
   filename: missing_specgrid.grdecl
   type: exception
