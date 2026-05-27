@@ -94,7 +94,7 @@ usage: em2ex.py [-h] [-o OUTPUT_FILE] [--filetype {eclipse,leapfrog}]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
                 [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
                 [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
-                [--fault-sidesets]
+                [--fault-sidesets] [--convert-to-m]
                 filename
 
 Converts earth model to Exodus II format
@@ -146,6 +146,10 @@ options:
                         "fault_secondary" containing the faces on either side
                         of every fault (any internal face where adjacent cells
                         do not share their corner nodes).
+  --convert-to-m        Convert grid coordinates to metres on output, using
+                        the input file's GRIDUNIT keyword as the source unit.
+                        Supported values are METRES (no-op), FEET and CM.
+                        Files without GRIDUNIT are assumed to be in metres.
 ```
 
 ### Lateral refinement (Eclipse only)
@@ -225,6 +229,33 @@ The two sidesets always have the same length and the entries are ordered consist
 Detection is purely topological: any internal face where the two adjacent cells disagree on their four shared face-corner node IDs becomes a fault face. This catches i-, j- and k-direction discontinuities equally; pinched cells (removed by `--pinch`) don't appear since they're already inactive by the time fault detection runs.
 
 Without `--fault-sidesets`, the output is unchanged and only the six standard boundary sidesets are written.
+
+### Coordinate units (Eclipse only)
+
+The Eclipse `GRIDUNIT` keyword declares the length unit of the grid. em2ex recognises three values:
+
+| `GRIDUNIT` value | Length unit | Factor to metres |
+|---|---|---|
+| `METRES` (or absent — the Eclipse default) | metres | 1.0 |
+| `FEET` | US survey feet | 0.3048 |
+| `CM` | centimetres | 0.01 |
+
+By default, em2ex **preserves the input file's units** — the numbers in `COORD` and `ZCORN` are passed through to the Exodus mesh unchanged. The Exodus format itself has no concept of length units, so it's the modeller's responsibility to remember (or document downstream) what units the mesh is in.
+
+To convert to metres on output, pass `--convert-to-m`:
+
+```bash
+./em2ex.py --convert-to-m model.grdecl
+```
+
+This multiplies every coordinate (`COORD` x/y/z and `ZCORN` z) by the appropriate factor and prints a one-line confirmation. **Per-cell property values are never converted** — `--convert-to-m` only affects geometry.
+
+A few practical notes:
+
+- **Non-metres files trigger an info note** at the start of the run telling you what unit the file is in and reminding you about `--convert-to-m`. The conversion is opt-in — em2ex never silently rescales your data.
+- **Files without `GRIDUNIT`** are treated as metres (Eclipse's documented default). No info note, no conversion needed.
+- **Unrecognised `GRIDUNIT` values** print an info note saying conversion is not available; the numbers pass through. Asking for `--convert-to-m` on an unrecognised unit is rejected with a clear error.
+- **Property units are entirely the modeller's responsibility.** The `GRIDUNIT` keyword only describes the unit of the grid's coordinates. Per-cell properties like `PERMX`, `HEATCR`, `THCONR`, etc. carry their own unit conventions (Eclipse's `METRIC`, `FIELD`, `LAB`, `PVT-M` unit systems each define their own choices for pressure, flow rate, permeability, density, thermal conductivity, etc.). em2ex does not track those conventions and applies no conversion to property values, even when `--convert-to-m` is rescaling the geometry. If your input file is in `FIELD` units (psi, bbl/day, mD, BTU-based thermal quantities, etc.) and you convert the geometry to metres, the property values stay in `FIELD` units; the resulting mesh is internally inconsistent and will need property conversion downstream before it's physically meaningful.
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.

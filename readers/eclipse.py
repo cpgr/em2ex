@@ -133,6 +133,14 @@ DEFAULT_KEYWORDS = ('ACTNUM', 'SATNUM', 'PORO',
                     'PERMX', 'PERMY', 'PERMZ',
                     'NTG', 'HEATCR', 'THCONR')
 
+# Recognised length units for the GRIDUNIT keyword and the factor that
+# converts them to metres. Files that omit GRIDUNIT default to METRES.
+GRIDUNIT_TO_METRES = {
+    'METRES': 1.0,
+    'FEET':   0.3048,
+    'CM':     0.01,
+}
+
 def readEclipse(f, eclipse, extra_keywords=()):
     ''' Read an Eclipse grdecl file and store the data in an Eclipse object.
     `extra_keywords` is an iterable of additional uppercase keyword names to
@@ -253,6 +261,25 @@ def parseEclipse(f, args):
     # Notify user that parsing has finished
     print("Finished parsing Eclipse file")
 
+    # Determine the grid's length unit from GRIDUNIT (default METRES if absent).
+    # Print an info note for any recognised non-METRES unit so the user is aware,
+    # plus a hint about --convert-to-m if they want the output in SI.
+    grid_unit = (eclipse.gridunit[0].upper() if eclipse.gridunit else 'METRES')
+    needs_conversion = grid_unit != 'METRES'
+    unit_known = grid_unit in GRIDUNIT_TO_METRES
+    if needs_conversion and unit_known:
+        print("Note: input grid uses {} (from GRIDUNIT keyword). Output mesh will be in {}.".format(grid_unit, grid_unit))
+        print("      Pass --convert-to-m to convert to metres on output.")
+    elif needs_conversion and not unit_known:
+        print("Note: input grid declares GRIDUNIT {} which is not recognised.".format(grid_unit))
+        print("      Conversion to metres is not available; output mesh will use the input values.")
+
+    # Validate the user's --convert-to-m request up front (before any work).
+    do_convert = bool(getattr(args, 'convert_to_m', False)) and needs_conversion
+    if getattr(args, 'convert_to_m', False) and needs_conversion and not unit_known:
+        print("--convert-to-m: unrecognised GRIDUNIT value {!r}; cannot convert.".format(grid_unit))
+        exit()
+
     # Now the data can be reshaped and processed for easy use
     # The COORD data has six entries for each of the (nx+1)*(ny+1) nodes
     coord = np.asarray(eclipse.coord).reshape(ny+1, nx+1, 6)
@@ -261,6 +288,17 @@ def parseEclipse(f, args):
     # is independent of any later coord transforms (flip / translate / mapaxes /
     # flip_z), all of which leave the (k, j, i) cell indexing unchanged.
     zcorn = np.asarray(eclipse.zcorn).reshape(2*nz, 2*ny, 2*nx)
+
+    # Apply --convert-to-m if requested: rescale every length-valued array by
+    # the GRIDUNIT->metres factor. coord stores x/y/z for both pillar
+    # endpoints (all 6 entries are coordinates); zcorn stores z values only.
+    # Done here, before extract/refine/flip, so the rest of the pipeline
+    # operates in metres.
+    if do_convert:
+        factor = GRIDUNIT_TO_METRES[grid_unit]
+        coord = coord * factor
+        zcorn = zcorn * factor
+        print("Converted {} -> metres on output (factor {}).".format(grid_unit, factor))
 
     # Apply --extract-i/-j/-k subsetting if requested. Indices are 1-based
     # inclusive in file order (matching the cells as they appear in the
