@@ -38,6 +38,8 @@ simple_cube_translated:
 simple_cube_mapaxes:
   filename: simple_cube_mapaxes.grdecl
   type: exodiff
+  # The MAPAXES spec (1.0 0.0 0.0 0.0 0.0 1.0) is orientation-reversing (det=-1).
+  # The reader detects this and negates xvec so the output has positive Jacobians.
   cli_args: --mapaxes
   gold: simple_cube_mapaxes.e
 
@@ -151,14 +153,21 @@ simple_cube_quoted_unit:
   type: exodiff
   gold: simple_cube.e
 
-# Z-up convention file (pillar tops at z=1, bots at z=0). em2ex's default
-# corner ordering treats this as inverted; --strict-jacobians should error
-# out rather than write a mesh
+# Z-up convention file (pillar tops at z=1, bots at z=0). em2ex produces a
+# faithful conversion but the Jacobian check sees all-negative elements;
+# --strict-jacobians upgrades that to a fatal error.
 strict_jacobians_inverted:
   filename: simple_cube_zup.grdecl
   type: exception
   cli_args: --strict-jacobians
   expected_error: exiting due to invalid Jacobians
+
+# Same z-up file without --strict-jacobians: conversion succeeds but the
+# all-negative hint (suggesting --flip) should be printed.
+all_negative_jacobians_hint:
+  filename: simple_cube_zup.grdecl
+  type: output
+  expected_output: All elements have non-positive Jacobians
 
 # Driven entirely by a YAML config file (extract + refine settings). The
 # output must match the same gold as the CLI-driven simple_cube_extract_refine

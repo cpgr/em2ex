@@ -161,7 +161,9 @@ options:
   --translate TRANSLATE TRANSLATE
                         Translate the (x, y) coordinates by this amount
   --mapaxes             Use the MAPAXES coordinates for an Eclipse file
-  --pinch               Remove pinched elements
+  --pinch               Remove pinched elements (coincident corners within
+                        --pinch-tol). Off by default; faithful conversion is
+                        produced without this flag.
   --pinch-tol PINCH_TOL
                         Tolerance for coincident corners when removing pinched
                         elements (default: 1e-3)
@@ -202,6 +204,10 @@ options:
   --strict-jacobians    Treat any non-positive element Jacobian as a fatal
                         error and exit non-zero. By default such elements only
                         produce a warning. Useful for CI / scripted workflows.
+  --remove-distorted    Remove elements with non-positive Jacobians (degenerate
+                        or inverted) from the output mesh, reporting a count of
+                        those removed. By default such elements are kept and
+                        only a warning is printed.
 ```
 
 ### Lateral refinement (Eclipse only)
@@ -311,31 +317,42 @@ A few practical notes:
 
 ### Element Jacobian check
 
-After the mesh is built, em2ex automatically computes the Jacobian at all 8 corners of every HEX8 element and prints a one-line summary:
+After conversion, em2ex evaluates the Jacobian at all 8 corners of every HEX8 element and prints a one-line summary:
 
 ```
 Element Jacobian check: 1000000 / 1000000 elements OK
 ```
 
-A non-positive Jacobian (negative = inverted element, zero = degenerate) almost always means one of two things:
+A non-positive Jacobian (zero = degenerate, negative = inverted) almost always means one of two things:
 
 - **The input file uses a `z increases upward` convention** rather than Eclipse's default `z increases downward`. The cells come out "upside down" and need `--flip` to invert the z values.
-- **There's something genuinely wrong with the input geometry** — corner ordering inconsistent within a cell, self-intersecting cells that survived pinch removal, etc.
+- **There are a few genuinely distorted cells** — for example near faults that are so skewed the element is inverted, or near-pinched cells that slipped through the tolerance filter.
 
-The relevance is downstream: most finite-element solvers (MOOSE, libMesh, MFEM, deal.II) reject elements with non-positive Jacobian at the assembly stage. Catching the problem at conversion time is cheaper than chasing it through a failed simulation.
-
-When the check fails, em2ex prints an expanded report with element IDs and centroid locations:
+When all elements are non-positive the output is expanded with a hint:
 
 ```
-Element Jacobian check: 1 negative, 0 zero, 0 OK (out of 1)
-  Examples of negative-Jacobian elements (showing up to 5 of 1):
-    element 1: centroid (0.5, 0.5, 0.5), min Jacobian = -1.000e+00
+Element Jacobian check: 27 negative, 0 zero, 0 OK (out of 27)
+  All elements have non-positive Jacobians. Possible causes:
+    - z-up coordinate convention: try --flip to invert the z-axis
+    - Orientation-reversing coordinate system (e.g. MAPAXES handedness)
+  Use --remove-distorted to remove these elements and proceed anyway.
 ```
 
-By default the conversion continues despite warnings (the Exodus file is still written; the user is informed). Two flags adjust this:
+When only some elements are bad, the report includes element IDs and centroid locations:
 
-- `--strict-jacobians` upgrades any non-positive Jacobian to a fatal error (exit code 1). Useful in CI / scripted workflows where a bad mesh should stop the pipeline rather than propagate downstream.
+```
+Element Jacobian check: 3 negative, 0 zero, 24 OK (out of 27)
+  Examples of negative-Jacobian elements (showing up to 5 of 3):
+    element 7: centroid (0.5, 0.5, 0.5), min Jacobian = -1.000e-03
+```
+
+By default the output file is still written regardless of warnings. Three flags adjust this:
+
+- `--remove-distorted` removes elements with non-positive Jacobians before writing, printing a count of those dropped. Useful when a small number of distorted cells near faults would otherwise cause solver failures.
+- `--strict-jacobians` upgrades any non-positive Jacobian to a fatal error (exit code 1). Useful in CI / scripted workflows where a bad mesh should stop the pipeline.
 - `--no-check-jacobians` skips the check entirely (a small time saving on very large grids, but disables a useful safety net).
+
+**Relationship to `--pinch`.** `--remove-distorted` and `--pinch` are complementary rather than interchangeable. `--pinch` detects cells where any two corners are within `--pinch-tol` of each other — it catches *near*-coincident corners (e.g. a 0.5 m thick cell in a grid measured in metres) even when the Jacobian is still technically positive. `--remove-distorted` catches cells whose Jacobian has already reached zero or gone negative, which only happens once corners are *exactly* coincident or the cell has become inverted. In practice, running both is the safest option for grids with thin reservoir layers near faults: `--pinch` handles the near-zero cells that `--remove-distorted` would miss, and `--remove-distorted` catches any remaining inverted cells.
 
 `em2ex` attempts to guess the reservoir model format from the file extension (see supported formats below). If the reservoir model has a non-standard file extension, the user can force
 `em2ex` to read the correct format using the `--filetype` commandline option.

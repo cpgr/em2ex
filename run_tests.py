@@ -66,6 +66,13 @@ def test_em2ex(key, use_official_api, exodiff):
 
             assert tests[key]['expected_error'] in str(excinfo.value)
 
+    # If the test type is output, check that expected text appears in stdout
+    elif tests[key]['type'] == 'output':
+        if 'expected_output' not in tests[key].keys():
+            pytest.skip(key + ': Skipped as expected_output not specified')
+        else:
+            check_output(key)
+
     else:
         # Skip unknown test type
         pytest.skip(key + ': Skipped as unknown test type')
@@ -123,5 +130,26 @@ def expected_error(key):
     result = subprocess.run(command, capture_output=True, text=True)
 
     raise Em2exException(result.stdout + result.stderr)
+
+    return
+
+def check_output(key):
+    ''' Check that expected text appears in em2ex stdout on a successful run '''
+
+    filepath = tests[key]['filepath']
+    filename = tests[key]['filename']
+    testfilename = os.path.join(filepath, filename)
+
+    command = ['./em2ex.py', '-f']
+    if 'cli_args' in tests[key].keys():
+        command.extend(tests[key]['cli_args'].split())
+    command.append(testfilename)
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    combined = result.stdout + result.stderr
+
+    assert tests[key]['expected_output'] in combined, \
+        '{}: expected output not found.\nExpected: {}\nGot: {}'.format(
+            key, tests[key]['expected_output'], combined)
 
     return

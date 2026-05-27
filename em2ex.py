@@ -117,7 +117,7 @@ def get_parser():
     parser.add_argument('--flip', dest = 'flip_z', action = 'store_true', help = 'Flip the sign of the Z coordinates')
     parser.add_argument('--translate', nargs = 2, dest = 'translate', type = float, help = 'Translate the (x, y) coordinates by this amount')
     parser.add_argument('--mapaxes', dest = 'use_mapaxes', action = 'store_true', help = 'Use the MAPAXES coordinates for an Eclipse file')
-    parser.add_argument('--pinch', default = True, dest = 'no_pinch', action = 'store_true', help = 'Remove pinched elements')
+    parser.add_argument('--pinch', default = False, dest = 'no_pinch', action = 'store_true', help = 'Remove pinched elements (coincident corners within --pinch-tol). Off by default; faithful conversion is produced without this flag.')
     parser.add_argument('--pinch-tol', default = 1e-3, dest = 'pinch_tol', type = float, help = 'Tolerance for coincident corners when removing pinched elements (default: 1e-3)')
     parser.add_argument('--refine-xy', nargs = 2, dest = 'refine_xy', type = _positive_int,
         metavar = ('RX', 'RY'),
@@ -142,6 +142,8 @@ def get_parser():
         help = 'Skip the per-element Jacobian sanity check. By default em2ex computes the Jacobian at all 8 corners of every HEX8 element and warns if any are non-positive (degenerate or inverted), since those elements would be rejected by most FEM solvers.')
     parser.add_argument('--strict-jacobians', dest = 'strict_jacobians', action = 'store_true',
         help = 'Treat any non-positive element Jacobian as a fatal error and exit non-zero. By default such elements only produce a warning. Useful for CI / scripted workflows.')
+    parser.add_argument('--remove-distorted', dest = 'remove_distorted', action = 'store_true',
+        help = 'Remove elements with non-positive Jacobians (degenerate or inverted) from the output mesh, reporting a count of those removed. By default such elements are kept and only a warning is printed.')
     return parser
 
 def main():
