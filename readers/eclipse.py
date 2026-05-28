@@ -332,11 +332,26 @@ def parseEclipse(f, args):
     if (coord[:,:,0][0,-1] - coord[:,:,0][0,0] < 0):
         # x coordinates are in decreasing order — reverse all pillar data along column axis
         coord = coord[:, ::-1, :]
+        # Flip zcorn along the x-axis. The (2*nz, 2*ny, 2*nx) layout stores
+        # corner pairs [left, right] per cell; reversing the last axis both
+        # reorders cells (last becomes first) and swaps left/right within each
+        # cell — exactly the transformation a mirror-in-x requires.
+        zcorn = zcorn[:, :, ::-1]
+        # Flip every per-cell property so they stay consistent with coord.
+        for _prop in list(eclipse.elemProps):
+            eclipse.elemProps[_prop] = np.flip(
+                eclipse.elemProps[_prop].reshape(nz, ny, nx), 2).flatten()
         flip_x = True
 
     if (coord[:,:,1][-1,0] - coord[:,:,1][0,0] < 0):
         # y coordinates are in decreasing order — reverse all pillar data along row axis
         coord = coord[::-1, :, :]
+        # Flip zcorn along the y-axis (same logic as x above).
+        zcorn = zcorn[:, ::-1, :]
+        # Flip every per-cell property along y.
+        for _prop in list(eclipse.elemProps):
+            eclipse.elemProps[_prop] = np.flip(
+                eclipse.elemProps[_prop].reshape(nz, ny, nx), 1).flatten()
         flip_y = True
 
     # Translate the coordinates if the translate commandline option is specified
@@ -515,21 +530,12 @@ def parseEclipse(f, args):
     if args.flip_z:
         elemNodes = elemNodes[:, [4, 5, 6, 7, 0, 1, 2, 3]]
 
-    # Apply any axis flips and then strip inactive elements from every prop in
-    # a single pass. The active mask and the flip decisions are constant across
-    # props, so they're computed once outside the loop.
+    # Strip inactive elements from every property. Properties (and active_elements
+    # itself) were already flipped consistently with coord at the flip-detection
+    # step above, so no further spatial reordering is needed here.
     active_mask = active_elements.flatten() > 0
-    needs_flip = flip_x or flip_y
     for prop in eclipse.elemProps:
-        arr = eclipse.elemProps[prop]
-        if needs_flip:
-            arr = arr.reshape(nz, ny, nx)
-            if flip_x:
-                arr = np.flip(arr, 2)
-            if flip_y:
-                arr = np.flip(arr, 1)
-            arr = arr.flatten()
-        eclipse.elemProps[prop] = arr[active_mask]
+        eclipse.elemProps[prop] = eclipse.elemProps[prop][active_mask]
 
     # Add data to the ExodusModel object
     model = ExodusModel()
