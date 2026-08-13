@@ -132,8 +132,9 @@ usage: em2ex.py [-h] [--config FILE] [-o OUTPUT_FILE]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
                 [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
                 [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
-                [--fault-sidesets] [--convert-to-m]
-                [--no-check-jacobians] [--strict-jacobians]
+                [--fault-sidesets] [--convert-to-m] [--no-check-jacobians]
+                [--strict-jacobians] [--remove-distorted] [--mesh-quality]
+                [--aspect-ratio-limit AR]
                 [filename]
 
 Converts earth model to Exodus II format
@@ -351,6 +352,48 @@ By default the output file is still written regardless of warnings. Three flags 
 - `--remove-distorted` removes elements with non-positive Jacobians before writing, printing a count of those dropped. Useful when a small number of distorted cells near faults would otherwise cause solver failures.
 - `--strict-jacobians` upgrades any non-positive Jacobian to a fatal error (exit code 1). Useful in CI / scripted workflows where a bad mesh should stop the pipeline.
 - `--no-check-jacobians` skips the check entirely (a small time saving on very large grids, but disables a useful safety net).
+
+### Mesh quality report
+
+The Jacobian check answers "is this mesh *valid*?". `--mesh-quality` answers the different question "is this mesh *well shaped*?" — which is what governs how well it will actually solve. Corner point grids out of Petrel routinely contain cells that are perfectly valid but very flat (100 m x 100 m laterally by 0.5 m thick is unremarkable), and while a finite volume reservoir simulator is built for that, a finite element code is not: high aspect ratio cells degrade matrix conditioning and preconditioner performance.
+
+```bash
+./em2ex.py --mesh-quality model.grdecl
+```
+
+```
+Mesh quality report: 27 elements
+                          min         5%        25%     median        75%        95%        max
+  aspect ratio          5.000      5.000      5.000      25.00      100.0      100.0      100.0
+  skew                  0.000      0.000      0.000      0.000      0.000      0.000      0.000
+  thickness          0.005000   0.005000   0.005000    0.02000     0.1000     0.1000     0.1000
+  volume             0.001250   0.001250   0.001250   0.005000    0.02500    0.02500    0.02500
+  Elements exceeding quality thresholds:
+  aspect ratio > 10                             18  (66.7%)
+  aspect ratio > 50                              9  (33.3%)
+  skew > 0.5                                     0  (0.0%)
+  Worst elements by aspect ratio:
+    element 1: aspect ratio 100, thickness 0.005, centroid (0.25, 0.25, 0.0025)
+```
+
+The four metrics are:
+
+- **aspect ratio** — longest edge divided by shortest edge. 1.0 is a cube. In a reservoir grid a large value nearly always means a thin layer rather than an over-wide cell, which is why thickness is reported next to it.
+- **skew** — the largest absolute cosine of the angle between the element's three principal axes (each running between the centroids of a pair of opposite faces). 0 is perfectly orthogonal, 1 is collapsed. This is what picks up sheared cells along faults, which an aspect ratio close to 1 will happily hide.
+- **thickness** — mean length of the four k-direction edges.
+- **volume** — exact volume of the trilinear element, computed by 2x2x2 Gauss quadrature (which integrates the trilinear Jacobian determinant exactly). Volumes are *signed*, so inverted elements report negative values, consistent with the Jacobian check.
+
+`--aspect-ratio-limit AR` adds a threshold to the counts alongside the built-in 10 and 50, for gauging how many cells sit above whatever limit your solver setup tolerates.
+
+This is a reporting flag only: it never modifies the mesh and never changes the exit code. It runs before the Jacobian check, so the distributions are still printed when `--strict-jacobians` aborts the run. It works from the element connectivity and node coordinates alone, so it applies to Leapfrog models as well as Eclipse ones.
+
+**Degenerate cells are held out of the statistics.** An element with a collapsed edge has an infinite aspect ratio, and a single infinity would turn most of a percentile row into `NaN`. Such cells are therefore excluded from every row *and* from the threshold counts — so all of the numbers above describe the same population — and counted on their own line instead:
+
+```
+  zero-length edge (excluded above)              1  (3.7%)
+```
+
+They still sort to the top of the "worst elements" list, so their locations are reported. A non-zero count here is the same population that `--pinch` removes and that the Jacobian check reports as zero-Jacobian.
 
 **Relationship to `--pinch`.** `--remove-distorted` and `--pinch` are complementary rather than interchangeable. `--pinch` detects cells where any two corners are within `--pinch-tol` of each other — it catches *near*-coincident corners (e.g. a 0.5 m thick cell in a grid measured in metres) even when the Jacobian is still technically positive. `--remove-distorted` catches cells whose Jacobian has already reached zero or gone negative, which only happens once corners are *exactly* coincident or the cell has become inverted. In practice, running both is the safest option for grids with thin reservoir layers near faults: `--pinch` handles the near-zero cells that `--remove-distorted` would miss, and `--remove-distorted` catches any remaining inverted cells.
 

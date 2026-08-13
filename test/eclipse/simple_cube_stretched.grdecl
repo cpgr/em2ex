@@ -1,0 +1,53 @@
+-- 3x3x3 grid with 0.5 x 0.5 lateral cells and three layers of differing
+-- thickness, used to exercise the --mesh-quality report:
+--   layer 1: thickness 0.005 -> aspect ratio 100
+--   layer 2: thickness 0.02  -> aspect ratio 25
+--   layer 3: thickness 0.1   -> aspect ratio 5
+-- Cells stay axis-aligned rectangular boxes, so skew is 0 throughout and the
+-- aspect ratios above are exact. The thicknesses are deliberately chosen so
+-- that no aspect ratio lands on a reporting threshold (10 or 50), where
+-- floating point rounding would make the counts ambiguous.
+
+SPECGRID
+3 3 3 1 F /
+
+GRIDUNIT
+  METRES /
+
+COORD
+ 0.000 0.000 0.000 0.000 0.000 1.000
+ 0.500 0.000 0.000 0.500 0.000 1.000
+ 1.000 0.000 0.000 1.000 0.000 1.000
+ 1.500 0.000 0.000 1.500 0.000 1.000
+ 0.000 0.500 0.000 0.000 0.500 1.000
+ 0.500 0.500 0.000 0.500 0.500 1.000
+ 1.000 0.500 0.000 1.000 0.500 1.000
+ 1.500 0.500 0.000 1.500 0.500 1.000
+ 0.000 1.000 0.000 0.000 1.000 1.000
+ 0.500 1.000 0.000 0.500 1.000 1.000
+ 1.000 1.000 0.000 1.000 1.000 1.000
+ 1.500 1.000 0.000 1.500 1.000 1.000
+ 0.000 1.500 0.000 0.000 1.500 1.000
+ 0.500 1.500 0.000 0.500 1.500 1.000
+ 1.000 1.500 0.000 1.000 1.500 1.000
+ 1.500 1.500 0.000 1.500 1.500 1.000
+/
+
+-- Each plane below is 2*nx by 2*ny = 36 corner values. Planes alternate
+-- top, bottom for each of the three layers.
+ZCORN
+  36*0.000
+  36*0.005
+  36*0.005
+  36*0.025
+  36*0.025
+  36*0.125
+/
+
+ACTNUM
+  27*1
+/
+
+SATNUM
+  27*1
+/
