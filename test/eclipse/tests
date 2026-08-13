@@ -38,8 +38,11 @@ simple_cube_translated:
 simple_cube_mapaxes:
   filename: simple_cube_mapaxes.grdecl
   type: exodiff
-  # The MAPAXES spec (1.0 0.0 0.0 0.0 0.0 1.0) is orientation-reversing (det=-1).
-  # The reader detects this and negates xvec so the output has positive Jacobians.
+  # The MAPAXES spec (1.0 0.0 0.0 0.0 0.0 1.0) is a reflection swapping x and y,
+  # so it defines a left-handed axis pair (det=-1). The reader applies the
+  # transform as specified and restores positive Jacobians by reversing the j
+  # index order, leaving the geometry alone: every cell centroid ends up at
+  # (local_y, local_x). The gold was regenerated when this changed - see #37.
   cli_args: --mapaxes
   gold: simple_cube_mapaxes.e
 
@@ -316,3 +319,28 @@ mesh_quality_custom_limit:
   type: output
   cli_args: --mesh-quality --aspect-ratio-limit 20
   expected_output: "aspect ratio > 20                             18  (66.7%)"
+
+# Issue #37: a MAPAXES defining a left-handed axis pair must be honoured, with
+# the resulting negative Jacobians fixed by reversing the j index order rather
+# than by negating an axis vector. Negating restores positive Jacobians while
+# silently mirroring the model to the wrong location (x: -30000..-10000 instead
+# of -10000..10000). The four distinct PORO values make the gold pin which cell
+# landed where, not just the bounding box.
+mapaxes_lefthanded:
+  filename: mapaxes_lefthanded.grdecl
+  type: exodiff
+  cli_args: --mapaxes
+  gold: mapaxes_lefthanded.e
+
+mapaxes_lefthanded_reports_reversal:
+  filename: mapaxes_lefthanded.grdecl
+  type: output
+  cli_args: --mapaxes
+  expected_output: "MAPAXES defines a left-handed axis pair; reversing the j index order"
+
+# The whole point of the fix: the geometry must survive with positive Jacobians.
+mapaxes_lefthanded_jacobians:
+  filename: mapaxes_lefthanded.grdecl
+  type: output
+  cli_args: --mapaxes --strict-jacobians
+  expected_output: "Element Jacobian check: 4 / 4 elements OK"
