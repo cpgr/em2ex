@@ -1,0 +1,57 @@
+-- Regression test for issue #37: a MAPAXES keyword defining a LEFT-HANDED pair
+-- of axes. This is the exact MAPAXES line from the model reported in that
+-- issue.
+--
+--   MAPAXES = (y-axis point) (origin) (x-axis point)
+--           = (-10000, 9000) (-10000, 10000) (-9000, 10000)
+--
+-- so the x-axis runs along +x and the y-axis along -y, giving a determinant of
+-- -1. The transform is therefore:
+--
+--   map_x = -10000 + local_x     local_x 0..20000 -> map_x -10000..10000
+--   map_y =  10000 - local_y     local_y 0..20000 -> map_y  10000..-10000
+--
+-- Petrel reports the model bounds as x: -10000..10000, y: -10000..10000, which
+-- the values above reproduce exactly.
+--
+-- em2ex must honour that transform and fix the resulting negative Jacobians by
+-- reversing the j index order, NOT by negating an axis vector. Negating mirrors
+-- the model to x: -30000..-10000 — right shape, wrong place, and with healthy
+-- looking Jacobians that give no hint anything is wrong.
+--
+-- The four PORO values are distinct so the gold file pins which cell landed
+-- where, rather than only pinning the bounding box (which a mirrored model of
+-- this symmetric grid would still satisfy).
+
+SPECGRID
+2 2 1 1 F /
+
+GRIDUNIT
+  METRES GRID /
+
+MAPAXES
+  -10000 9000  -10000 10000 -9000 10000 /
+
+COORD
+     0.0     0.0     0.0     0.0     0.0  4000.0
+ 10000.0     0.0     0.0 10000.0     0.0  4000.0
+ 20000.0     0.0     0.0 20000.0     0.0  4000.0
+     0.0 10000.0     0.0     0.0 10000.0  4000.0
+ 10000.0 10000.0     0.0 10000.0 10000.0  4000.0
+ 20000.0 10000.0     0.0 20000.0 10000.0  4000.0
+     0.0 20000.0     0.0     0.0 20000.0  4000.0
+ 10000.0 20000.0     0.0 10000.0 20000.0  4000.0
+ 20000.0 20000.0     0.0 20000.0 20000.0  4000.0
+/
+
+ZCORN
+  16*0.0
+  16*300.0
+/
+
+PORO
+  1 2 3 4 /
+
+ACTNUM
+  4*1
+/

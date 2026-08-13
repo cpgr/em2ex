@@ -324,35 +324,24 @@ def parseEclipse(f, args):
     # The exodus node numbering relies on a right-hand coordinate system, with
     # x and y increasing. However, eclipse can output a grid with a left-hand
     # coordinate system, with either (or both) x and y decreasing (ie, pointing in
-    # the negative direction). This will lead to a negative element Jacobian when an
-    # exodus mesh is created. Therefore, we flip the decreasing coordinate, create
-    # the grid, then flip the coordinate again.
-
-    flip_x, flip_y = False, False
+    # the negative direction). This will lead to a negative element Jacobian when
+    # an exodus mesh is created. Reversing the index order along that axis fixes
+    # it, because it relabels the pillars and cells without moving any of them.
+    #
+    # These two checks also canonicalise the index order (i increasing with x,
+    # j increasing with y), not just the handedness, so they are kept as
+    # separate per-axis monotonicity tests rather than a single determinant
+    # test: a grid with both axes decreasing is already right-handed, but still
+    # needs both indices reversed to match the conventional ordering.
     if (coord[:,:,0][0,-1] - coord[:,:,0][0,0] < 0):
-        # x coordinates are in decreasing order — reverse all pillar data along column axis
-        coord = coord[:, ::-1, :]
-        # Flip zcorn along the x-axis. The (2*nz, 2*ny, 2*nx) layout stores
-        # corner pairs [left, right] per cell; reversing the last axis both
-        # reorders cells (last becomes first) and swaps left/right within each
-        # cell — exactly the transformation a mirror-in-x requires.
-        zcorn = zcorn[:, :, ::-1]
-        # Flip every per-cell property so they stay consistent with coord.
-        for _prop in list(eclipse.elemProps):
-            eclipse.elemProps[_prop] = np.flip(
-                eclipse.elemProps[_prop].reshape(nz, ny, nx), 2).flatten()
-        flip_x = True
+        # x coordinates are in decreasing order — reverse the i index order
+        coord, zcorn = _reverseGridAxis(
+            coord, zcorn, eclipse.elemProps, nx, ny, nz, 'i')
 
     if (coord[:,:,1][-1,0] - coord[:,:,1][0,0] < 0):
-        # y coordinates are in decreasing order — reverse all pillar data along row axis
-        coord = coord[::-1, :, :]
-        # Flip zcorn along the y-axis (same logic as x above).
-        zcorn = zcorn[:, ::-1, :]
-        # Flip every per-cell property along y.
-        for _prop in list(eclipse.elemProps):
-            eclipse.elemProps[_prop] = np.flip(
-                eclipse.elemProps[_prop].reshape(nz, ny, nx), 1).flatten()
-        flip_y = True
+        # y coordinates are in decreasing order — reverse the j index order
+        coord, zcorn = _reverseGridAxis(
+            coord, zcorn, eclipse.elemProps, nx, ny, nz, 'j')
 
     # Translate the coordinates if the translate commandline option is specified
     if args.translate:
@@ -382,20 +371,29 @@ def parseEclipse(f, args):
             xvec = xvec / np.sqrt(xvec[0]**2 + xvec[1]**2)
             yvec = yvec / np.sqrt(yvec[0]**2 + yvec[1]**2)
 
-            # If the MAPAXES transform is orientation-reversing (det < 0), negate xvec so
-            # the resulting mesh has positive Jacobians instead of all-negative ones.
-            det = xvec[0] * yvec[1] - xvec[1] * yvec[0]
-            if det < 0:
-                print("MAPAXES transform is orientation-reversing (det={:.6g}); "
-                      "negating x-axis direction to restore positive Jacobians".format(det))
-                xvec = -xvec
-
             # Transform top and bottom pillar x,y: world = origin + local_x*xhat + local_y*yhat
             for xi, yi in [(0, 1), (3, 4)]:
                 xdata = coord[:,:,xi].copy()
                 ydata = coord[:,:,yi].copy()
                 coord[:,:,xi] = xorigin + xdata * xvec[0] + ydata * yvec[0]
                 coord[:,:,yi] = yorigin + xdata * xvec[1] + ydata * yvec[1]
+
+            # MAPAXES is free to define a left-handed pair of axes, which leaves
+            # the transformed lattice mirrored and every element Jacobian
+            # negative. Fix that by reversing the j index order, which relabels
+            # cells without moving them.
+            #
+            # Negating one of the axis vectors before the transform would also
+            # restore positive Jacobians, but it does so by mirroring the model
+            # into the wrong location — the grid ends up the right shape in the
+            # wrong place, with no warning, because the Jacobians look healthy.
+            # Handedness is a property of the node ordering, not the node
+            # positions, so it has to be fixed in the ordering. See issue #37.
+            if _lateralOrientation(coord) < 0:
+                print("MAPAXES defines a left-handed axis pair; reversing the j index "
+                      "order to restore positive Jacobians (geometry is unchanged)")
+                coord, zcorn = _reverseGridAxis(
+                    coord, zcorn, eclipse.elemProps, nx, ny, nz, 'j')
 
     # Flip the Z coordinates if specified
     if args.flip_z:
@@ -599,6 +597,49 @@ def parseEclipse(f, args):
 #   element corner 6 -> (kk=1, jj=1, ii=1) flat 7
 #   element corner 7 -> (kk=1, jj=1, ii=0) flat 6
 _CORNER_TO_KJI = [0, 1, 3, 2, 4, 5, 7, 6]
+
+def _lateralOrientation(coord):
+    ''' Signed determinant of the grid's lateral (i, j) direction vectors.
+
+    Positive means the pillar lattice is right-handed in map view, which is what
+    the exodus node ordering requires. Negative means a mirrored lattice, which
+    gives every element a negative Jacobian.
+
+    Uses the full corner-to-corner spans rather than testing x and y separately,
+    so the result stays correct when a MAPAXES rotation leaves x varying along j
+    rather than along i.
+    '''
+    x, y = coord[:, :, 0], coord[:, :, 1]
+    di = (x[0, -1] - x[0, 0], y[0, -1] - y[0, 0])
+    dj = (x[-1, 0] - x[0, 0], y[-1, 0] - y[0, 0])
+    return di[0] * dj[1] - di[1] * dj[0]
+
+
+def _reverseGridAxis(coord, zcorn, elemProps, nx, ny, nz, axis):
+    ''' Reverse the grid's index order along axis 'i' or 'j'.
+
+    This relabels pillars and cells without moving any of them, so it changes
+    the grid's handedness while leaving its geometry untouched. The
+    (2*nz, 2*ny, 2*nx) zcorn layout stores corner pairs [low, high] per cell, so
+    reversing the corresponding axis both reorders the cells and swaps low/high
+    within each cell — exactly what a mirror in that index requires.
+
+    `elemProps` is updated in place; the reversed coord and zcorn are returned.
+    '''
+    if axis == 'i':
+        coord_axis, zcorn_axis, prop_axis = 1, 2, 2
+    elif axis == 'j':
+        coord_axis, zcorn_axis, prop_axis = 0, 1, 1
+    else:
+        raise ValueError("axis must be 'i' or 'j', got {!r}".format(axis))
+
+    coord = np.flip(coord, coord_axis)
+    zcorn = np.flip(zcorn, zcorn_axis)
+    for name in list(elemProps):
+        elemProps[name] = np.flip(
+            elemProps[name].reshape(nz, ny, nx), prop_axis).flatten()
+    return coord, zcorn
+
 
 def elemCornerCoords(corner_coords):
     ''' Returns coordinates for all eight corners of each element. Input is

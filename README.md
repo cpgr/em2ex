@@ -289,6 +289,27 @@ Detection is purely topological: any internal face where the two adjacent cells 
 
 Without `--fault-sidesets`, the output is unchanged and only the six standard boundary sidesets are written.
 
+### Map coordinates (Eclipse only)
+
+Eclipse grids store their `COORD` pillars in a local grid coordinate system. The `MAPAXES` keyword defines how that local system sits in map space, as three points — a point on the y-axis, the origin, and a point on the x-axis:
+
+```
+MAPAXES
+  -10000 9000  -10000 10000 -9000 10000 /
+```
+
+Passing `--mapaxes` applies that transform, so the output mesh lands on the same map coordinates the model has in Petrel. Without the flag the local `COORD` values are used verbatim, which is why an untransformed model often appears with its origin at a corner rather than wherever Petrel shows it. The transform is only applied when `GRIDUNIT`'s second entry is `GRID`; some Petrel exports write `MAPAXES` and `GRIDUNIT` into a separate `.INC` file rather than the `.grdecl` itself, in which case they need to be `INCLUDE`d or pasted in.
+
+**Left-handed axes.** `MAPAXES` is free to define a left-handed pair — the example above has its x-axis along +x but its y-axis along −y, a determinant of −1. Applying it as specified mirrors the grid's orientation, which makes every element Jacobian negative and the mesh unusable. em2ex detects this and restores the orientation by **reversing the j index order**, which relabels cells without moving them:
+
+```
+MAPAXES defines a left-handed axis pair; reversing the j index order to restore positive Jacobians (geometry is unchanged)
+```
+
+The distinction matters. Handedness is a property of the node *ordering*, not the node *positions*, so it has to be fixed in the ordering. Negating one of the axis vectors before the transform would also produce positive Jacobians, but by mirroring the model into the wrong place — for the grid above, `x: -30000..-10000` instead of the correct `x: -10000..10000`. That failure is particularly nasty because the Jacobians come out healthy, so nothing warns you that the mesh is sitting 20 km from where it belongs.
+
+If you are matching against well data or another dataset in map coordinates, check the resulting bounds against the model statistics in Petrel. `--translate` is available for any remaining shift.
+
 ### Coordinate units (Eclipse only)
 
 The Eclipse `GRIDUNIT` keyword declares the length unit of the grid. em2ex recognises three values:
@@ -335,7 +356,8 @@ When all elements are non-positive the output is expanded with a hint:
 Element Jacobian check: 27 negative, 0 zero, 0 OK (out of 27)
   All elements have non-positive Jacobians. Possible causes:
     - z-up coordinate convention: try --flip to invert the z-axis
-    - Orientation-reversing coordinate system (e.g. MAPAXES handedness)
+    - Orientation-reversing coordinate system (left-handed MAPAXES axes
+      are corrected automatically; this is some other inversion)
   Use --remove-distorted to remove these elements and proceed anyway.
 ```
 

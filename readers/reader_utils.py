@@ -371,7 +371,8 @@ def checkElementJacobians(model, strict=False):
     if num_ok == 0:
         print('  All elements have non-positive Jacobians. Possible causes:')
         print('    - z-up coordinate convention: try --flip to invert the z-axis')
-        print('    - Orientation-reversing coordinate system (e.g. MAPAXES handedness)')
+        print('    - Orientation-reversing coordinate system (left-handed MAPAXES axes')
+        print('      are corrected automatically; this is some other inversion)')
         print('  Use --remove-distorted to remove these elements and proceed anyway.')
 
     exodus_ids = _exodusElementIds(model)
