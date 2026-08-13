@@ -144,6 +144,11 @@ def get_parser():
         help = 'Treat any non-positive element Jacobian as a fatal error and exit non-zero. By default such elements only produce a warning. Useful for CI / scripted workflows.')
     parser.add_argument('--remove-distorted', dest = 'remove_distorted', action = 'store_true',
         help = 'Remove elements with non-positive Jacobians (degenerate or inverted) from the output mesh, reporting a count of those removed. By default such elements are kept and only a warning is printed.')
+    parser.add_argument('--mesh-quality', dest = 'mesh_quality', action = 'store_true',
+        help = 'Print a report of element shape quality (aspect ratio, skew, thickness and volume) as percentile distributions, with counts of elements exceeding the aspect ratio and skew thresholds and the location of the worst cells. Reporting only: the mesh is not modified.')
+    parser.add_argument('--aspect-ratio-limit', dest = 'aspect_ratio_limit', type = float, default = None,
+        metavar = 'AR',
+        help = 'Additional aspect ratio threshold to count in the --mesh-quality report, on top of the default 10 and 50.')
     return parser
 
 def main():
@@ -193,6 +198,15 @@ def main():
     else:
         print('File extension ', file_extension, ' not supported')
         exit()
+
+    # Element shape quality report. Printed before the Jacobian check so the
+    # distributions are still shown when --strict-jacobians aborts the run.
+    if getattr(args, 'mesh_quality', False):
+        from readers.reader_utils import meshQualityReport
+        thresholds = [10.0, 50.0]
+        if getattr(args, 'aspect_ratio_limit', None):
+            thresholds.append(args.aspect_ratio_limit)
+        meshQualityReport(model, aspect_thresholds=sorted(thresholds))
 
     # Mesh quality: check element Jacobians before writing the Exodus file.
     # Default is to warn but continue; --strict-jacobians upgrades to a fatal
