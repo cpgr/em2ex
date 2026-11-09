@@ -653,27 +653,6 @@ def elemCornerCoords(corner_coords):
                       .reshape(nz * ny * nx, 8))
     return c[:, _CORNER_TO_KJI]
 
-# def coordToCorn(coord, nz):
-#     ''' Transform coord data (x, y) coordinates to (x, y) corners for each node '''
-
-#     # Extract x and y coordinates from coord data
-#     xdata = np.asarray(coord[:,:,0])
-#     ydata = np.asarray(coord[:,:,1])
-
-#     # Repeat all internal coordinates to double the size of the arrays
-#     xcorn = np.repeat(np.repeat(xdata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
-#     ycorn = np.repeat(np.repeat(ydata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
-
-#     # Pillars do not vary with k, so the (2*ny, 2*nx) layer is the same for
-#     # every k-slice. np.broadcast_to returns a zero-copy read-only view of
-#     # shape (2*nz, 2*ny, 2*nx); the downstream reshape inside
-#     # elemCornerCoords forces a single contiguous copy at use time, rather
-#     # than allocating the full layered array up-front.
-#     xcorn = np.broadcast_to(xcorn, (2 * nz,) + xcorn.shape)
-#     ycorn = np.broadcast_to(ycorn, (2 * nz,) + ycorn.shape)
-
-#     return xcorn, ycorn
-
 def coordToCorn(coord, zcorn, nz):
        ''' x, y of every corner, found by sliding along its pillar (top point -> bottom
        point in COORD) to the corner's depth in ZCORN. Works for sloping pillars;
