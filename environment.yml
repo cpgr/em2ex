@@ -1,6 +1,6 @@
 name: em2ex
 channels:
-- defaults
+- conda-forge
 dependencies:
 - pandas
 - netCDF4
