@@ -410,7 +410,7 @@ def parseEclipse(f, args):
 
     # Transform coord data to zcorn format (so that there is an x and y coordinate
     # for each node in the grid)
-    xcorn, ycorn = coordToCorn(coord, nz)
+    xcorn, ycorn = coordToCorn(coord,-zcorn if args.flip_z else zcorn, nz)
 
     # Now transform all of the coordinate arrays into element-ordered array, where
     # each row corresponds to a single element containing eight corners
@@ -653,26 +653,25 @@ def elemCornerCoords(corner_coords):
                       .reshape(nz * ny * nx, 8))
     return c[:, _CORNER_TO_KJI]
 
-def coordToCorn(coord, nz):
-    ''' Transform coord data (x, y) coordinates to (x, y) corners for each node '''
+def coordToCorn(coord, zcorn, nz):
+       ''' x, y of every corner, found by sliding along its pillar (top point -> bottom
+       point in COORD) to the corner's depth in ZCORN. Works for sloping pillars;
+       for vertical pillars it gives the pillar's top x, y as before. '''
 
-    # Extract x and y coordinates from coord data
-    xdata = np.asarray(coord[:,:,0])
-    ydata = np.asarray(coord[:,:,1])
+       def expand(a):
+           # pillar array (ny+1, nx+1) -> corner layout (2*nz, 2*ny, 2*nx)
+           a = np.repeat(np.repeat(np.asarray(a), 2, axis=0), 2, axis=1)[1:-1, 1:-1]
+           return np.broadcast_to(a, (2 * nz,) + a.shape)
 
-    # Repeat all internal coordinates to double the size of the arrays
-    xcorn = np.repeat(np.repeat(xdata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
-    ycorn = np.repeat(np.repeat(ydata, 2, axis=0), 2, axis=1)[1:-1,1:-1]
+       x1, y1, z1, x2, y2, z2 = (expand(coord[:, :, n]) for n in range(6))
+       dz = z2 - z1
+       flat = np.abs(dz) < 1e-9          # pillar with no depth extent: keep top x, y
+       t = np.where(flat, 0.0, (zcorn - z1) / np.where(flat, 1.0, dz))
+       xcorn = x1 + t * (x2 - x1)
+       ycorn = y1 + t * (y2 - y1)
 
-    # Pillars do not vary with k, so the (2*ny, 2*nx) layer is the same for
-    # every k-slice. np.broadcast_to returns a zero-copy read-only view of
-    # shape (2*nz, 2*ny, 2*nx); the downstream reshape inside
-    # elemCornerCoords forces a single contiguous copy at use time, rather
-    # than allocating the full layered array up-front.
-    xcorn = np.broadcast_to(xcorn, (2 * nz,) + xcorn.shape)
-    ycorn = np.broadcast_to(ycorn, (2 * nz,) + ycorn.shape)
+       return xcorn, ycorn
 
-    return xcorn, ycorn
 
 def elemCornToCoord(elemcorns, elemNodes):
     ''' Transform coordinate data for each element corner to a unique node ordered

@@ -29,6 +29,23 @@ simple_cube_flipped_z:
   cli_args: --flip
   gold: simple_cube_flipped_z.e
 
+# Every pillar slopes (dx/dz = 0.5, dy/dz = 0.25), so each corner's x, y must be
+# interpolated along its pillar to the corner's ZCORN depth rather than taken from
+# the top of the pillar. The gold file has every node at (x + 0.5 z, y + 0.25 z)
+# and every cell volume 0.125, the same as simple_cube.
+sloping_cube:
+  filename: sloping_cube.grdecl
+  type: exodiff
+  gold: sloping_cube.e
+
+# As above with --flip: ZCORN is negated before the corners are built, so this
+# checks that the pillar interpolation still uses the original (unflipped) depths.
+sloping_cube_flipped_z:
+  filename: sloping_cube.grdecl
+  type: exodiff
+  cli_args: --flip
+  gold: sloping_cube_flipped_z.e
+
 simple_cube_translated:
   filename: simple_cube.grdecl
   type: exodiff
