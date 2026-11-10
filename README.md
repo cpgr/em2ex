@@ -97,6 +97,7 @@ The config is a YAML mapping. Each key is **the CLI flag name with the leading `
 extract_i: [10, 50]
 extract_j: [10, 50]
 refine_xy: [2, 2]
+coarsen_z: 5          # or a list of group sizes, e.g. [5, 5, 10]
 
 # Property handling
 extra_keywords:
@@ -130,10 +131,11 @@ usage: em2ex.py [-h] [--config FILE] [-o OUTPUT_FILE]
                 [--no-sidesets] [-f] [-u] [--flip]
                 [--translate TRANSLATE TRANSLATE] [--mapaxes] [--pinch]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
-                [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
-                [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
-                [--fault-sidesets] [--convert-to-m] [--no-check-jacobians]
-                [--strict-jacobians] [--remove-distorted] [--mesh-quality]
+                [--coarsen-z N[,N...]] [--extract-i I_LO I_HI]
+                [--extract-j J_LO J_HI] [--extract-k K_LO K_HI]
+                [--extra-keywords KEY [KEY ...]] [--fault-sidesets]
+                [--convert-to-m] [--no-check-jacobians] [--strict-jacobians]
+                [--remove-distorted] [--mesh-quality]
                 [--aspect-ratio-limit AR]
                 [filename]
 
@@ -171,6 +173,15 @@ options:
   --refine-xy RX RY     Refine the grid laterally by integer factors RX in x
                         and RY in y (vertical resolution unchanged). Each
                         child cell inherits its parent's element properties.
+  --coarsen-z N[,N...]  Upscale vertically by merging layers. A single value N
+                        merges every N layers into one (the last merged layer
+                        takes any remainder); a comma-separated list such as
+                        5,5,10 gives the number of layers in each merged
+                        layer, top to bottom, and must add up to NZ. Pillars
+                        are unchanged; pore volume is conserved; PERMX/PERMY
+                        are averaged arithmetically, PERMZ harmonically, and
+                        region arrays (*NUM) take the value with the most pore
+                        volume. Runs after --extract-* and before --refine-xy.
   --extract-i I_LO I_HI
                         Extract cells I_LO..I_HI along the x-axis (1-based
                         inclusive, Eclipse-style). Cells are taken in file
@@ -220,6 +231,30 @@ The `--refine-xy RX RY` option refines an Eclipse grid in the (x, y) plane by in
 ```
 
 `RX` and `RY` must be strictly positive integers; anything else is rejected up front with an informative error.
+
+### Vertical upscaling (Eclipse only)
+
+The `--coarsen-z` option merges layers to reduce the number of cells, which is often needed to make a large geological model practical to simulate. A single value merges every `N` layers; a comma-separated list gives the number of layers in each merged layer from the top down (for example to follow geological zones), and must add up to the number of layers:
+
+```bash
+./em2ex.py --coarsen-z 5 model.grdecl          # 92 layers -> 19 (18 x 5, plus 2)
+./em2ex.py --coarsen-z 10,20,62 model.grdecl   # three merged layers
+```
+
+The pillars are unchanged. Each merged cell runs from the top of its first layer to the bottom of its last layer, column by column, so faults are preserved. Properties are combined using the exact volumes of the original cells, counting only active cells:
+
+| keyword | merged value |
+|---|---|
+| `ACTNUM` | 1 if any original cell is active |
+| `NTG` | net volume / merged cell volume |
+| `PORO` | pore volume / (merged cell volume x `NTG`), so the total pore volume is unchanged |
+| `PERMX`, `PERMY` | net-volume-weighted arithmetic mean (layers act in parallel) |
+| `PERMZ` | volume-weighted harmonic mean over the active layers (layers act in series); 0 if any active layer has 0 |
+| `PORV` | sum |
+| `SATNUM` and other `...NUM` keywords | the value that holds the most pore volume (ties go to the smaller value) |
+| anything else (`HEATCR`, `THCONR`, ...) | volume-weighted arithmetic mean |
+
+Inactive original cells inside a merged cell add to its volume but not to its pore volume or flow. The pore volume before and after merging is printed so you can check it. `--coarsen-z` runs after `--extract-*` (so layer counts refer to the extracted layers) and before `--refine-xy`.
 
 ### Extracting a subset (Eclipse only)
 

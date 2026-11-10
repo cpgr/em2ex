@@ -1,0 +1,61 @@
+-- One 1 m x 1 m column of four layers, used to check --coarsen-z against
+-- values worked out by hand.
+--   layer  depth    thickness  ACTNUM  PORO  NTG  PERMX  PERMY  PERMZ  SATNUM
+--     1    0 - 1        1        1     0.1   1.0    10     20      1      1
+--     2    1 - 2        1        1     0.3   0.5   100    200     10      2
+--     3    2 - 4        2        1     0.3   1.0  1000   2000    100      2
+--     4    4 - 5        1        0     0.4   1.0    50    100      5      3
+-- --coarsen-z 2 gives two merged layers:
+--   layers 1-2: NTG 0.75, PORO 1/6, PERMX 40, PERMY 80, PERMZ 20/11, SATNUM 2
+--   layers 3-4: NTG 2/3, PORO 0.3, PERMX 1000, PERMY 2000, PERMZ 100, SATNUM 2
+--   (layer 4 is inactive, so it adds volume but no pore volume or flow)
+-- --coarsen-z 1,3 keeps layer 1 and merges layers 2-4:
+--   layers 2-4: NTG 0.625, PORO 0.3, PERMX 820, PERMY 1640, PERMZ 25, SATNUM 2
+
+SPECGRID
+1 1 4 1 F /
+
+GRIDUNIT
+  METRES /
+
+COORD
+ 0.0 0.0 0.0 0.0 0.0 5.0
+ 1.0 0.0 0.0 1.0 0.0 5.0
+ 0.0 1.0 0.0 0.0 1.0 5.0
+ 1.0 1.0 0.0 1.0 1.0 5.0
+/
+
+ZCORN
+0 0 0 0  1 1 1 1
+1 1 1 1  2 2 2 2
+2 2 2 2  4 4 4 4
+4 4 4 4  5 5 5 5
+/
+
+ACTNUM
+1 1 1 0
+/
+
+PORO
+0.1 0.3 0.3 0.4
+/
+
+NTG
+1.0 0.5 1.0 1.0
+/
+
+PERMX
+10 100 1000 50
+/
+
+PERMY
+20 200 2000 100
+/
+
+PERMZ
+1 10 100 5
+/
+
+SATNUM
+1 2 2 3
+/

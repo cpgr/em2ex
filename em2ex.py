@@ -90,6 +90,19 @@ def _positive_int(s):
             "expected a positive integer (>= 1), got {}".format(v))
     return v
 
+def _layer_groups(s):
+    ''' argparse type for --coarsen-z: a positive integer N, or a comma-separated
+    list of positive integers (one per merged layer). Returned as a list. '''
+    if isinstance(s, (list, tuple)):        # from a YAML --config list
+        parts = list(s)
+    elif isinstance(s, int):                # from a YAML --config number
+        parts = [s]
+    else:
+        parts = [p for p in str(s).split(',') if p.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError("expected N or N,N,... got {!r}".format(s))
+    return [_positive_int(p) for p in parts]
+
 def _eclipse_keyword(s):
     ''' argparse type for an Eclipse property keyword. Normalises to uppercase
     and rejects anything that isn't a short alphanumeric token. '''
@@ -122,6 +135,9 @@ def get_parser():
     parser.add_argument('--refine-xy', nargs = 2, dest = 'refine_xy', type = _positive_int,
         metavar = ('RX', 'RY'),
         help = 'Refine the grid laterally by integer factors RX in x and RY in y (vertical resolution unchanged). Each child cell inherits its parent\'s element properties.')
+    parser.add_argument('--coarsen-z', dest = 'coarsen_z', type = _layer_groups,
+        metavar = 'N[,N...]',
+        help = 'Upscale vertically by merging layers. A single value N merges every N layers into one (the last merged layer takes any remainder); a comma-separated list such as 5,5,10 gives the number of layers in each merged layer, top to bottom, and must add up to NZ. Pillars are unchanged; pore volume is conserved; PERMX/PERMY are averaged arithmetically, PERMZ harmonically, and region arrays (*NUM) take the value with the most pore volume. Runs after --extract-* and before --refine-xy.')
     parser.add_argument('--extract-i', nargs = 2, dest = 'extract_i', type = _positive_int,
         metavar = ('I_LO', 'I_HI'),
         help = 'Extract cells I_LO..I_HI along the x-axis (1-based inclusive, Eclipse-style). Cells are taken in file order, before any coordinate-system normalisation; runs before --refine-xy if both are given.')

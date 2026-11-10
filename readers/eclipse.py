@@ -321,6 +321,16 @@ def parseEclipse(f, args):
             coord, zcorn, eclipse.elemProps, nx, ny, nz,
             i_lo, i_hi, j_lo, j_hi, k_lo, k_hi)
 
+    # Apply --coarsen-z if requested: merge groups of layers into single layers.
+    # Runs in file order (after --extract-*, before any flip / translate /
+    # mapaxes / refine), so layer numbers are those of the grdecl file, counted
+    # within the extracted range if --extract-k was also given.
+    coarsen_z = getattr(args, 'coarsen_z', None)
+    if coarsen_z:
+        groups = _resolve_layer_groups(coarsen_z, nz)
+        coord, zcorn, eclipse.elemProps, nz = coarsenVertically(
+            coord, zcorn, eclipse.elemProps, nx, ny, nz, groups)
+
     # The exodus node numbering relies on a right-hand coordinate system, with
     # x and y increasing. However, eclipse can output a grid with a left-hand
     # coordinate system, with either (or both) x and y decreasing (ie, pointing in
@@ -1005,3 +1015,142 @@ def _refine_axis(a, r, axis):
     interior = blended.reshape(new_shape)
     last = np.take(a, [n], axis=axis)
     return np.concatenate([interior, last], axis=axis)
+
+
+def _resolve_layer_groups(coarsen_z, nz):
+    ''' Turn the --coarsen-z values into a list of layer counts that sums to nz.
+    One value N merges every N layers (the last group takes any remainder);
+    several values give the size of each group explicitly, top to bottom. '''
+    # From the command line this is already a list of ints; from a --config
+    # YAML file it may also be a single number or a "5,5,10" string.
+    if isinstance(coarsen_z, (int, float, str)):
+        coarsen_z = [p for p in str(coarsen_z).split(',') if p.strip()]
+    sizes = [int(n) for n in coarsen_z]
+    if not sizes or min(sizes) < 1:
+        print("--coarsen-z needs positive layer counts, got {}".format(coarsen_z))
+        exit()
+    if len(sizes) == 1:
+        n = sizes[0]
+        groups = [n] * (nz // n) + ([nz % n] if nz % n else [])
+    else:
+        groups = sizes
+        if sum(groups) != nz:
+            print("--coarsen-z group sizes {} add up to {} layers, but the grid has {} "
+                  "(NZ in SPECGRID, or the --extract-k range)".format(
+                      ' '.join(str(g) for g in groups), sum(groups), nz))
+            exit()
+    return groups
+
+
+# Region (integer) arrays: the merged cell takes the value that holds the most
+# pore volume in its group. Any keyword ending in NUM is treated this way.
+def _is_region_keyword(name):
+    return name.upper().endswith('NUM')
+
+
+def coarsenVertically(coord, zcorn, elemProps, nx, ny, nz, groups):
+    ''' Merge consecutive layers into single layers (vertical upscaling).
+
+    `groups` lists how many layers go into each merged layer, top to bottom,
+    and sums to nz. Pillars are unchanged. Each merged cell runs from the top
+    of its first layer to the bottom of its last layer in its own column, so
+    faults (ZCORN jumps between neighbouring columns) are preserved.
+
+    Properties are averaged with the fine cells' exact volumes as weights,
+    counting only active fine cells:
+      ACTNUM        1 if any fine cell is active
+      NTG           net volume / merged cell volume
+      PORO          pore volume / (merged cell volume x NTG), so the merged
+                    pore volume equals the sum of the fine pore volumes
+      PERMX, PERMY  net-volume-weighted arithmetic mean (layers in parallel)
+      PERMZ         volume-weighted harmonic mean (layers in series)
+      PORV          summed
+      ...NUM        value holding the most pore volume (ties: smallest value)
+      others        volume-weighted arithmetic mean (e.g. HEATCR, THCONR)
+
+    Inputs and outputs follow extractSubgrid / refineLaterally:
+        coord     : (ny+1, nx+1, 6)        pillar top/bottom (x, y, z)
+        zcorn     : (2*nz, 2*ny, 2*nx)     per-cell corner z values
+        elemProps : dict[name -> flat ndarray of length nx*ny*nz]
+    Returns (coord, zcorn, elemProps, new_nz).
+    '''
+    from readers.reader_utils import hex8Volumes
+
+    groups = [int(g) for g in groups]
+    if all(g == 1 for g in groups):
+        return coord, zcorn, elemProps, nz
+    ncz = len(groups)
+    starts = np.concatenate(([0], np.cumsum(groups)[:-1])).astype(int)
+    ends = starts + np.asarray(groups)
+
+    # Geometry: top face of each group's first layer, bottom face of its last.
+    zcorn_new = np.empty((2 * ncz, 2 * ny, 2 * nx), dtype=float)
+    zcorn_new[0::2] = zcorn[2 * starts]
+    zcorn_new[1::2] = zcorn[2 * ends - 1]
+
+    def volumes(zc, n):
+        xc, yc = coordToCorn(coord, zc, n)
+        P = np.stack([elemCornerCoords(xc), elemCornerCoords(yc),
+                      elemCornerCoords(zc)], axis=-1)
+        return np.abs(hex8Volumes(P)).reshape(n, ny, nx)
+
+    V = volumes(zcorn, nz)               # fine cell volumes
+    Vc = volumes(zcorn_new, ncz)         # merged cell volumes
+
+    def get(name, default):
+        if name in elemProps:
+            return np.asarray(elemProps[name], dtype=float).reshape(nz, ny, nx)
+        return np.full((nz, ny, nx), default, dtype=float)
+
+    def S(a):                            # sum over each group of layers
+        return np.add.reduceat(a, starts, axis=0)
+
+    def div(num, den):
+        return np.divide(num, den, out=np.zeros_like(num, dtype=float), where=den > 0)
+
+    act = (get('ACTNUM', 1.0) > 0).astype(float)
+    ntg = get('NTG', 1.0)
+    poro = get('PORO', 1.0)
+    Va = V * act                         # active volume
+    Vnet = Va * ntg                      # active net volume
+    pv = Vnet * poro                     # pore volume (or net volume if no PORO)
+
+    ntg_c = div(S(Vnet), Vc) if 'NTG' in elemProps else np.ones_like(Vc)
+    new = {}
+    for name, vals in elemProps.items():
+        key = name.upper()
+        a = np.asarray(vals, dtype=float).reshape(nz, ny, nx)
+        if key == 'ACTNUM':
+            c = (S(act) > 0).astype(float)
+        elif key == 'NTG':
+            c = ntg_c
+        elif key == 'PORO':
+            c = div(S(pv), Vc * ntg_c)
+        elif key in ('PERMX', 'PERMY'):
+            c = div(S(Vnet * a), Vc * ntg_c)
+        elif key == 'PERMZ':
+            # harmonic mean over the active layers; any zero-permeability
+            # active layer seals the merged cell
+            blocked = S(((a <= 0) & (act > 0)).astype(float)) > 0
+            c = div(S(Va), S(div(Va, np.where(a > 0, a, 1.0))))
+            c[blocked] = 0.0
+        elif key == 'PORV':
+            c = S(a * act)
+        elif _is_region_keyword(key):
+            # weight by pore volume; a group with no pore volume falls back to volume
+            w = np.where(np.repeat(S(pv), groups, axis=0) > 0, pv, Va)
+            values = np.unique(a)
+            score = np.stack([S(w * (a == v)) for v in values])   # (nvalues, ncz, ny, nx)
+            c = values[np.argmax(score, axis=0)]                  # argmax picks the smallest value on a tie
+        else:
+            c = div(S(Va * a), S(Va))
+        new[name] = c.flatten()
+
+    msg = "Merged {} layers into {} (group sizes {})".format(
+        nz, ncz, ' '.join(str(g) for g in groups))
+    if 'PORO' in elemProps:
+        msg += "; pore volume {:.6g} before, {:.6g} after".format(
+            pv.sum(), (Vc * ntg_c * np.asarray(new['PORO']).reshape(Vc.shape)).sum())
+    print(msg)
+
+    return coord, zcorn_new, new, ncz

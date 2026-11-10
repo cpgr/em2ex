@@ -361,3 +361,32 @@ mapaxes_lefthanded_jacobians:
   type: output
   cli_args: --mapaxes --strict-jacobians
   expected_output: "Element Jacobian check: 4 / 4 elements OK"
+
+# --coarsen-z: vertical upscaling. coarsen_column.grdecl lists the expected
+# merged values (worked out by hand) in its header; the gold files hold them.
+coarsen_column:
+  filename: coarsen_column.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 2
+  gold: coarsen_column.e
+
+# Explicit group sizes, top to bottom (keep layer 1, merge layers 2-4)
+coarsen_column_groups:
+  filename: coarsen_column.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 1,3
+  gold: coarsen_column_groups.e
+
+# Merging on sloping pillars, with a remainder group (3 layers -> 2 + 1).
+# Corners stay on the pillars; merged cell volumes are 0.25 and 0.125.
+sloping_cube_coarsen:
+  filename: sloping_cube.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 2
+  gold: sloping_cube_coarsen.e
+
+coarsen_bad_groups:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --coarsen-z 2,2
+  expected_error: --coarsen-z group sizes 2 2 add up to 4 layers, but the grid has 3
