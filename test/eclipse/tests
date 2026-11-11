@@ -390,3 +390,52 @@ coarsen_bad_groups:
   type: exception
   cli_args: --coarsen-z 2,2
   expected_error: --coarsen-z group sizes 2 2 add up to 4 layers, but the grid has 3
+
+# Inactive layers inside a merged layer: by default an inactive layer between
+# two active layers seals the merged cell vertically (PERMZ = 0), as in Eclipse
+# without PINCH; --coarsen-z-pinch connects across it, as with PINCH. The
+# expected values are listed in the header of coarsen_inactive.grdecl.
+coarsen_inactive_seal:
+  filename: coarsen_inactive.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 3
+  gold: coarsen_inactive_seal.e
+
+coarsen_inactive_pinch:
+  filename: coarsen_inactive.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 3 --coarsen-z-pinch
+  gold: coarsen_inactive_pinch.e
+
+coarsen_inactive_seal_report:
+  filename: coarsen_inactive.grdecl
+  type: output
+  cli_args: --coarsen-z 3
+  expected_output: PERMZ set to 0 in 1 merged cell(s) where an inactive layer separates active layers
+
+# "Most of" (mode) choice of SATNUM with each --coarsen-z-region-weight.
+# coarsen_regions.grdecl is built so that count, bulk volume and pore volume
+# each pick a different SATNUM (1, 2 and 3); see its header.
+coarsen_regions_count:
+  filename: coarsen_regions.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 4 --coarsen-z-region-weight count
+  gold: coarsen_regions_count.e
+
+coarsen_regions_volume:
+  filename: coarsen_regions.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 4 --coarsen-z-region-weight volume
+  gold: coarsen_regions_volume.e
+
+coarsen_regions_pore_volume:
+  filename: coarsen_regions.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 4
+  gold: coarsen_regions_pore-volume.e
+
+coarsen_regions_report:
+  filename: coarsen_regions.grdecl
+  type: output
+  cli_args: --coarsen-z 4
+  expected_output: "SATNUM: most-of by pore-volume; 45.5% of the pore volume had a different SATNUM"

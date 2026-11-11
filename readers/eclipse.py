@@ -329,7 +329,9 @@ def parseEclipse(f, args):
     if coarsen_z:
         groups = _resolve_layer_groups(coarsen_z, nz)
         coord, zcorn, eclipse.elemProps, nz = coarsenVertically(
-            coord, zcorn, eclipse.elemProps, nx, ny, nz, groups)
+            coord, zcorn, eclipse.elemProps, nx, ny, nz, groups,
+            seal_inactive=not getattr(args, 'coarsen_z_pinch', False),
+            region_weight=getattr(args, 'coarsen_z_region_weight', 'pore-volume'))
 
     # The exodus node numbering relies on a right-hand coordinate system, with
     # x and y increasing. However, eclipse can output a grid with a left-hand
@@ -1048,7 +1050,8 @@ def _is_region_keyword(name):
     return name.upper().endswith('NUM')
 
 
-def coarsenVertically(coord, zcorn, elemProps, nx, ny, nz, groups):
+def coarsenVertically(coord, zcorn, elemProps, nx, ny, nz, groups, seal_inactive=True,
+                      region_weight='pore-volume'):
     ''' Merge consecutive layers into single layers (vertical upscaling).
 
     `groups` lists how many layers go into each merged layer, top to bottom,
@@ -1063,9 +1066,17 @@ def coarsenVertically(coord, zcorn, elemProps, nx, ny, nz, groups):
       PORO          pore volume / (merged cell volume x NTG), so the merged
                     pore volume equals the sum of the fine pore volumes
       PERMX, PERMY  net-volume-weighted arithmetic mean (layers in parallel)
-      PERMZ         volume-weighted harmonic mean (layers in series)
+      PERMZ         volume-weighted harmonic mean over the active layers
+                    (layers in series); 0 if any active layer has PERMZ <= 0,
+                    or, when seal_inactive is True, if an inactive layer lies
+                    between two active layers of the group. The latter matches
+                    Eclipse without PINCH, where inactive cells block vertical
+                    flow; seal_inactive=False matches Eclipse with PINCH.
       PORV          summed
-      ...NUM        value holding the most pore volume (ties: smallest value)
+      ...NUM        "most of": the value with the largest share of the group,
+                    measured by region_weight -- 'pore-volume' (default),
+                    'volume' (bulk volume) or 'count' (number of cells) --
+                    over the active cells (ties: smallest value)
       others        volume-weighted arithmetic mean (e.g. HEATCR, THCONR)
 
     Inputs and outputs follow extractSubgrid / refineLaterally:
@@ -1116,6 +1127,33 @@ def coarsenVertically(coord, zcorn, elemProps, nx, ny, nz, groups):
     pv = Vnet * poro                     # pore volume (or net volume if no PORO)
 
     ntg_c = div(S(Vnet), Vc) if 'NTG' in elemProps else np.ones_like(Vc)
+
+    # Merged cells in which an inactive layer separates two active layers of
+    # the same group. In Eclipse without PINCH such a layer blocks vertical
+    # flow between them, so with seal_inactive the merged PERMZ is set to 0.
+    gap = np.zeros((ncz, ny, nx), dtype=bool)
+    for g, (s0, s1) in enumerate(zip(starts, ends)):
+        A = act[s0:s1] > 0
+        above = np.logical_or.accumulate(A, axis=0)              # active at or above
+        below = np.logical_or.accumulate(A[::-1], axis=0)[::-1]  # active at or below
+        gap[g] = ((~A) & above & below).any(axis=0)
+    gap &= S(act) > 0
+    # Weight for the "most of" vote on region keywords (*NUM). Only active cells
+    # vote; where a merged cell has no weight at all (e.g. no pore volume),
+    # the next measure down is used: pore volume -> bulk volume -> cell count.
+    measures = {'pore-volume': pv, 'volume': Va, 'count': act}
+    order = ['pore-volume', 'volume', 'count']
+    if region_weight not in measures:
+        print("Unknown region weighting {!r}; use one of {}".format(region_weight, ', '.join(order)))
+        exit()
+    w_reg = np.zeros_like(V)
+    filled = np.zeros((ncz, ny, nx), dtype=bool)
+    for m in order[order.index(region_weight):]:
+        use = (~filled) & (S(measures[m]) > 0)
+        w_reg = np.where(np.repeat(use, groups, axis=0), measures[m], w_reg)
+        filled |= use
+    mixing = {}
+
     new = {}
     for name, vals in elemProps.items():
         key = name.upper()
@@ -1134,14 +1172,19 @@ def coarsenVertically(coord, zcorn, elemProps, nx, ny, nz, groups):
             blocked = S(((a <= 0) & (act > 0)).astype(float)) > 0
             c = div(S(Va), S(div(Va, np.where(a > 0, a, 1.0))))
             c[blocked] = 0.0
+            if seal_inactive:
+                c[gap] = 0.0
         elif key == 'PORV':
             c = S(a * act)
         elif _is_region_keyword(key):
-            # weight by pore volume; a group with no pore volume falls back to volume
-            w = np.where(np.repeat(S(pv), groups, axis=0) > 0, pv, Va)
+            # "Most of": each value scores its share of the group, and the
+            # largest share wins (argmax picks the smallest value on a tie)
             values = np.unique(a)
-            score = np.stack([S(w * (a == v)) for v in values])   # (nvalues, ncz, ny, nx)
-            c = values[np.argmax(score, axis=0)]                  # argmax picks the smallest value on a tie
+            score = np.stack([S(w_reg * (a == v)) for v in values])   # (nvalues, ncz, ny, nx)
+            c = values[np.argmax(score, axis=0)]
+            # share of the group (by the same weight) whose value was discarded
+            kept = np.repeat(c, groups, axis=0) == a
+            mixing[name] = (S(w_reg * ~kept).sum(), S(w_reg).sum())
         else:
             c = div(S(Va * a), S(Va))
         new[name] = c.flatten()
@@ -1152,5 +1195,20 @@ def coarsenVertically(coord, zcorn, elemProps, nx, ny, nz, groups):
         msg += "; pore volume {:.6g} before, {:.6g} after".format(
             pv.sum(), (Vc * ntg_c * np.asarray(new['PORO']).reshape(Vc.shape)).sum())
     print(msg)
+    unit = {'pore-volume': 'pore volume', 'volume': 'bulk volume', 'count': 'cells'}[region_weight]
+    for name, (lost, total) in mixing.items():
+        if total > 0:
+            print("{0}: most-of by {1}; {2:.1f}% of the {3} had a different {0} "
+                  "and now takes the merged cell's value".format(
+                      name, region_weight, 100.0 * lost / total, unit))
+    n_gap = int(gap.sum())
+    if n_gap and 'PERMZ' in elemProps:
+        if seal_inactive:
+            print("PERMZ set to 0 in {} merged cell(s) where an inactive layer separates "
+                  "active layers (as in Eclipse without PINCH; use --coarsen-z-pinch to "
+                  "connect across them)".format(n_gap))
+        else:
+            print("{} merged cell(s) connect active layers across an inactive layer "
+                  "(--coarsen-z-pinch)".format(n_gap))
 
     return coord, zcorn_new, new, ncz

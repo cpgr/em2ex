@@ -138,6 +138,11 @@ def get_parser():
     parser.add_argument('--coarsen-z', dest = 'coarsen_z', type = _layer_groups,
         metavar = 'N[,N...]',
         help = 'Upscale vertically by merging layers. A single value N merges every N layers into one (the last merged layer takes any remainder); a comma-separated list such as 5,5,10 gives the number of layers in each merged layer, top to bottom, and must add up to NZ. Pillars are unchanged; pore volume is conserved; PERMX/PERMY are averaged arithmetically, PERMZ harmonically, and region arrays (*NUM) take the value with the most pore volume. Runs after --extract-* and before --refine-xy.')
+    parser.add_argument('--coarsen-z-pinch', default = False, dest = 'coarsen_z_pinch', action = 'store_true',
+        help = 'With --coarsen-z, let vertical flow pass through inactive layers inside a merged layer, as Eclipse does with the PINCH keyword. By default an inactive layer between two active layers seals the merged cell (PERMZ = 0), as in Eclipse without PINCH.')
+    parser.add_argument('--coarsen-z-region-weight', default = 'pore-volume', dest = 'coarsen_z_region_weight',
+        choices = ['pore-volume', 'volume', 'count'],
+        help = 'With --coarsen-z, how SATNUM and other region keywords (*NUM) are chosen for each merged cell. They use the "most of" (mode) rule: the value with the largest share of the merged cell wins and the others are discarded. The share is measured by pore volume (default; best for simulation), bulk volume, or number of cells. Only active cells count. The share of each region keyword whose value was discarded is printed.')
     parser.add_argument('--extract-i', nargs = 2, dest = 'extract_i', type = _positive_int,
         metavar = ('I_LO', 'I_HI'),
         help = 'Extract cells I_LO..I_HI along the x-axis (1-based inclusive, Eclipse-style). Cells are taken in file order, before any coordinate-system normalisation; runs before --refine-xy if both are given.')
