@@ -1,0 +1,64 @@
+-- Three 1 m x 1 m x 1 m columns (A, B, C along x) of three layers, used to
+-- check how --coarsen-z treats inactive layers for PERMZ. PERMZ is 10, 1 and
+-- 40 mD in layers 1, 2 and 3 of every column.
+--   column  ACTNUM (layers 1,2,3)   inactive layer
+--     A          1 0 1              between two active layers
+--     B          1 1 1              none
+--     C          0 1 1              at the top edge only
+-- --coarsen-z 3 merges each column into one cell. Expected merged PERMZ:
+--     A   0         (inactive layer seals, as in Eclipse without PINCH)
+--         16        with --coarsen-z-pinch: 2 / (1/10 + 1/40)
+--     B   8/3       3 / (1/10 + 1/1 + 1/40)
+--     C   80/41     2 / (1/1 + 1/40); an inactive layer at the edge does not
+--                   separate active layers, so it never seals
+
+SPECGRID
+3 1 3 1 F /
+
+GRIDUNIT
+  METRES /
+
+COORD
+ 0.0 0.0 0.0 0.0 0.0 3.0
+ 1.0 0.0 0.0 1.0 0.0 3.0
+ 2.0 0.0 0.0 2.0 0.0 3.0
+ 3.0 0.0 0.0 3.0 0.0 3.0
+ 0.0 1.0 0.0 0.0 1.0 3.0
+ 1.0 1.0 0.0 1.0 1.0 3.0
+ 2.0 1.0 0.0 2.0 1.0 3.0
+ 3.0 1.0 0.0 3.0 1.0 3.0
+/
+
+ZCORN
+6*0 6*0  6*1 6*1
+6*1 6*1  6*2 6*2
+6*2 6*2  6*3 6*3
+/
+
+ACTNUM
+1 1 0
+0 1 1
+1 1 1
+/
+
+PORO
+9*0.2
+/
+
+PERMX
+9*100
+/
+
+PERMY
+9*100
+/
+
+PERMZ
+10 10 10
+1 1 1
+40 40 40
+/
+
+SATNUM
+9*1
+/

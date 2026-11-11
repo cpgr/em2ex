@@ -97,6 +97,9 @@ The config is a YAML mapping. Each key is **the CLI flag name with the leading `
 extract_i: [10, 50]
 extract_j: [10, 50]
 refine_xy: [2, 2]
+coarsen_z: 5          # or a list of group sizes, e.g. [5, 5, 10]
+coarsen_z_pinch: true # connect across inactive layers (Eclipse PINCH)
+coarsen_z_region_weight: pore-volume   # or volume, count
 
 # Property handling
 extra_keywords:
@@ -130,6 +133,8 @@ usage: em2ex.py [-h] [--config FILE] [-o OUTPUT_FILE]
                 [--no-sidesets] [-f] [-u] [--flip]
                 [--translate TRANSLATE TRANSLATE] [--mapaxes] [--pinch]
                 [--pinch-tol PINCH_TOL] [--refine-xy RX RY]
+                [--coarsen-z N[,N...]] [--coarsen-z-pinch]
+                [--coarsen-z-region-weight {pore-volume,volume,count}]
                 [--extract-i I_LO I_HI] [--extract-j J_LO J_HI]
                 [--extract-k K_LO K_HI] [--extra-keywords KEY [KEY ...]]
                 [--fault-sidesets] [--convert-to-m] [--no-check-jacobians]
@@ -171,6 +176,29 @@ options:
   --refine-xy RX RY     Refine the grid laterally by integer factors RX in x
                         and RY in y (vertical resolution unchanged). Each
                         child cell inherits its parent's element properties.
+  --coarsen-z N[,N...]  Upscale vertically by merging layers. A single value N
+                        merges every N layers into one (the last merged layer
+                        takes any remainder); a comma-separated list such as
+                        5,5,10 gives the number of layers in each merged
+                        layer, top to bottom, and must add up to NZ. Pillars
+                        are unchanged; pore volume is conserved; PERMX/PERMY
+                        are averaged arithmetically, PERMZ harmonically, and
+                        region arrays (*NUM) take the value with the most pore
+                        volume. Runs after --extract-* and before --refine-xy.
+  --coarsen-z-pinch     With --coarsen-z, let vertical flow pass through
+                        inactive layers inside a merged layer, as Eclipse does
+                        with the PINCH keyword. By default an inactive layer
+                        between two active layers seals the merged cell (PERMZ
+                        = 0), as in Eclipse without PINCH.
+  --coarsen-z-region-weight {pore-volume,volume,count}
+                        With --coarsen-z, how SATNUM and other region keywords
+                        (*NUM) are chosen for each merged cell. They use the
+                        "most of" (mode) rule: the value with the largest
+                        share of the merged cell wins and the others are
+                        discarded. The share is measured by pore volume
+                        (default; best for simulation), bulk volume, or number
+                        of cells. Only active cells count. The share of each
+                        region keyword whose value was discarded is printed.
   --extract-i I_LO I_HI
                         Extract cells I_LO..I_HI along the x-axis (1-based
                         inclusive, Eclipse-style). Cells are taken in file
@@ -220,6 +248,40 @@ The `--refine-xy RX RY` option refines an Eclipse grid in the (x, y) plane by in
 ```
 
 `RX` and `RY` must be strictly positive integers; anything else is rejected up front with an informative error.
+
+### Vertical upscaling (Eclipse only)
+
+The `--coarsen-z` option merges layers to reduce the number of cells, which is often needed to make a large geological model practical to simulate. A single value merges every `N` layers; a comma-separated list gives the number of layers in each merged layer from the top down (for example to follow geological zones), and must add up to the number of layers:
+
+```bash
+./em2ex.py --coarsen-z 5 model.grdecl          # 92 layers -> 19 (18 x 5, plus 2)
+./em2ex.py --coarsen-z 10,20,62 model.grdecl   # three merged layers
+```
+
+The pillars are unchanged. Each merged cell runs from the top of its first layer to the bottom of its last layer, column by column, so faults are preserved. Properties are combined using the exact volumes of the original cells, counting only active cells:
+
+| keyword | merged value |
+|---|---|
+| `ACTNUM` | 1 if any original cell is active |
+| `NTG` | net volume / merged cell volume |
+| `PORO` | pore volume / (merged cell volume x `NTG`), so the total pore volume is unchanged |
+| `PERMX`, `PERMY` | net-volume-weighted arithmetic mean (layers act in parallel) |
+| `PERMZ` | volume-weighted harmonic mean over the active layers (layers act in series); 0 if any active layer has 0, or if an inactive layer lies between two active layers (see below) |
+| `PORV` | sum |
+| `SATNUM` and other `...NUM` keywords | "most of" (mode): the value with the largest share of the merged cell, by pore volume (default), bulk volume or cell count; ties go to the smaller value |
+| anything else (`HEATCR`, `THCONR`, ...) | volume-weighted arithmetic mean |
+
+Inactive original cells inside a merged cell add to its volume but not to its pore volume. For vertical flow they follow Eclipse: without the `PINCH` keyword, an inactive cell blocks flow between the active cells above and below it, so by default a merged cell whose active layers are separated by an inactive layer gets `PERMZ = 0`, and the number of such cells is printed. If the Eclipse deck uses `PINCH` (Petrel exports often do), add `--coarsen-z-pinch` to connect across inactive layers instead. An inactive layer at the top or bottom of a merged layer does not separate its active layers, so it never seals that cell; note that the connection between two merged layers is then not blocked even where Eclipse (without `PINCH`) would block it, so to keep such a barrier, choose group sizes that keep it inside a merged layer. The pore volume before and after merging is printed so you can check it.
+
+Region keywords such as `SATNUM` are discrete labels (in em2ex, `SATNUM` also sets the mesh blocks, e.g. facies with their own relative permeability and capillary pressure), so they cannot be averaged. Each merged cell takes the value that occupies the largest share of it, and the other values in that cell are discarded – the "most of" method used for discrete upscaling in Petrel. `--coarsen-z-region-weight` sets how the share is measured, counting active cells only:
+
+| `--coarsen-z-region-weight` | the value that wins has the most |
+|---|---|
+| `pore-volume` (default) | pore volume (bulk volume x `NTG` x `PORO`), i.e. where the fluids are; best for simulation |
+| `volume` | bulk volume |
+| `count` | cells |
+
+For each region keyword, em2ex prints the share (by the same measure) that had a different value and was reassigned, for example `SATNUM: most-of by pore-volume; 35.7% of the pore volume had a different SATNUM and now takes the merged cell's value`. A large share means the facies vary on a smaller scale than the merged layers, and the coarse model loses that detail whichever weighting is used; consider merging fewer layers, or choosing group sizes that follow the facies. `--coarsen-z` runs after `--extract-*` (so layer counts refer to the extracted layers) and before `--refine-xy`.
 
 ### Extracting a subset (Eclipse only)
 

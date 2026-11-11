@@ -361,3 +361,81 @@ mapaxes_lefthanded_jacobians:
   type: output
   cli_args: --mapaxes --strict-jacobians
   expected_output: "Element Jacobian check: 4 / 4 elements OK"
+
+# --coarsen-z: vertical upscaling. coarsen_column.grdecl lists the expected
+# merged values (worked out by hand) in its header; the gold files hold them.
+coarsen_column:
+  filename: coarsen_column.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 2
+  gold: coarsen_column.e
+
+# Explicit group sizes, top to bottom (keep layer 1, merge layers 2-4)
+coarsen_column_groups:
+  filename: coarsen_column.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 1,3
+  gold: coarsen_column_groups.e
+
+# Merging on sloping pillars, with a remainder group (3 layers -> 2 + 1).
+# Corners stay on the pillars; merged cell volumes are 0.25 and 0.125.
+sloping_cube_coarsen:
+  filename: sloping_cube.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 2
+  gold: sloping_cube_coarsen.e
+
+coarsen_bad_groups:
+  filename: simple_cube.grdecl
+  type: exception
+  cli_args: --coarsen-z 2,2
+  expected_error: --coarsen-z group sizes 2 2 add up to 4 layers, but the grid has 3
+
+# Inactive layers inside a merged layer: by default an inactive layer between
+# two active layers seals the merged cell vertically (PERMZ = 0), as in Eclipse
+# without PINCH; --coarsen-z-pinch connects across it, as with PINCH. The
+# expected values are listed in the header of coarsen_inactive.grdecl.
+coarsen_inactive_seal:
+  filename: coarsen_inactive.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 3
+  gold: coarsen_inactive_seal.e
+
+coarsen_inactive_pinch:
+  filename: coarsen_inactive.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 3 --coarsen-z-pinch
+  gold: coarsen_inactive_pinch.e
+
+coarsen_inactive_seal_report:
+  filename: coarsen_inactive.grdecl
+  type: output
+  cli_args: --coarsen-z 3
+  expected_output: PERMZ set to 0 in 1 merged cell(s) where an inactive layer separates active layers
+
+# "Most of" (mode) choice of SATNUM with each --coarsen-z-region-weight.
+# coarsen_regions.grdecl is built so that count, bulk volume and pore volume
+# each pick a different SATNUM (1, 2 and 3); see its header.
+coarsen_regions_count:
+  filename: coarsen_regions.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 4 --coarsen-z-region-weight count
+  gold: coarsen_regions_count.e
+
+coarsen_regions_volume:
+  filename: coarsen_regions.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 4 --coarsen-z-region-weight volume
+  gold: coarsen_regions_volume.e
+
+coarsen_regions_pore_volume:
+  filename: coarsen_regions.grdecl
+  type: exodiff
+  cli_args: --coarsen-z 4
+  gold: coarsen_regions_pore-volume.e
+
+coarsen_regions_report:
+  filename: coarsen_regions.grdecl
+  type: output
+  cli_args: --coarsen-z 4
+  expected_output: "SATNUM: most-of by pore-volume; 45.5% of the pore volume had a different SATNUM"
